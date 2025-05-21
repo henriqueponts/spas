@@ -1,0 +1,68 @@
+cd .\frontEnd\ ---- npm run dev
+
+cd .\server\ ---- npm start
+
+
+--SQL
+
+create database spas_db;
+use spas_db;
+
+CREATE TABLE equipamento (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL UNIQUE,
+    regiao VARCHAR(100),
+    endereco VARCHAR(255),
+    telefone VARCHAR(20),
+    email VARCHAR(100),
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE cargos (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nome VARCHAR(50) NOT NULL UNIQUE,
+    descricao TEXT NULL
+);
+
+CREATE TABLE usuarios (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nome VARCHAR(255) NOT NULL,
+    cpf VARCHAR(14) NOT NULL UNIQUE,
+    senha_hash VARCHAR(255) NOT NULL,
+    cargo_id INT NOT NULL,
+    equipamento_id INT NOT NULL,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (cargo_id) REFERENCES cargos(id),
+    FOREIGN KEY (equipamento_id) REFERENCES equipamento(id)
+      ON DELETE RESTRICT
+      ON UPDATE CASCADE
+);
+
+
+SELECT 
+    u.nome AS nome_usuario,
+    e.nome AS nome_equipamento,
+    c.nome AS nome_cargo
+FROM usuarios u
+INNER JOIN equipamento e ON u.equipamento_id = e.id
+INNER JOIN cargos c ON u.cargo_id = c.id;
+
+select * from usuarios;
+
+INSERT INTO cargos (nome, descricao) VALUES
+('EXTERNO','EXTERNO'),('ASSISTENTE','ASSISTENTE'),('TECNICO','TECNICO'), ('COORDENADOR','COORDENADOR'),('DIRETOR','DIRETOR');
+
+INSERT INTO equipamento (nome, regiao, endereco, telefone, email)
+VALUES 
+('CRAS Oeste', 'Oeste', 'Rua das Palmeiras, 123 - Bairro Oeste', '(17) 3345-1100', 'cras.oeste@bebedouro.sp.gov.br'),
+('CRAS Leste', 'Leste', 'Avenida Brasil, 456 - Bairro Leste', '(17) 3345-2200', 'cras.leste@bebedouro.sp.gov.br'),
+('CRAS Norte', 'Norte', 'Rua Amazonas, 789 - Bairro Norte', '(17) 3345-3300', 'cras.norte@bebedouro.sp.gov.br'),
+('CRAS Sul', 'Sul', 'Rua Rio de Janeiro, 101 - Bairro Sul', '(17) 3345-4400', 'cras.sul@bebedouro.sp.gov.br'),
+('CREAS Central', 'Centro', 'Praça da Matriz, 200 - Centro', '(17) 3345-5500', 'creas@bebedouro.sp.gov.br'),
+('Centro POP', 'Centro', 'Rua XV de Novembro, 321 - Centro', '(17) 3345-6600', 'centropop@bebedouro.sp.gov.br'),
+('Secretaria de Assistência Social', 'Centro', 'Rua São João, 400 - Centro', '(17) 3345-7700', 'assistencia@bebedouro.sp.gov.br');
