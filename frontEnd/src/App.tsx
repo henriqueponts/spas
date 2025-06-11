@@ -1,122 +1,98 @@
 // src/App.tsx
-import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { CargoRoutes } from './types';
 
-// Importar páginas (você precisará criar estes arquivos)
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+
+// Contexto e Componentes de Rota
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+
+// Tipos para Cargos
+import { Cargo, CargoNames } from './types';
+
+// Páginas Públicas
 import Login from './pages/Login';
+import AcessoNegado from './pages/AcessoNegado';
+
+
+// Páginas Protegidas
+import Registro from './pages/Registro';
+import Home from './pages/Home'; // Supondo que você tenha uma página Home
 import DashboardDiretor from './pages/dashboards/DashboardDiretor';
 import DashboardCoordenador from './pages/dashboards/DashboardCoordenador';
 import DashboardTecnico from './pages/dashboards/DashboardTecnico';
 import DashboardAssistente from './pages/dashboards/DashboardAssistente';
 
 
-// Componente para redirecionar da rota raiz
-const RootRedirect: React.FC = () => {
-  const { user, loading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        navigate('/login');
-      } else {
-        const route = CargoRoutes[user.cargo_id as keyof typeof CargoRoutes];
-        navigate(route || '/login');
-      }
-    }
-  }, [user, loading, navigate]);
-
-  return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-lg">Carregando...</div>
-    </div>
-  );
-};
-
 function App() {
   return (
+    // O AuthProvider envolve toda a aplicação para fornecer o contexto de autenticação
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Rota pública */}
+          {/* --- ROTAS PÚBLICAS --- */}
+          {/* Rotas que não exigem login */}
           <Route path="/login" element={<Login />} />
-          
-          {/* Rotas protegidas por cargo */}
+          <Route path="/acesso-negado" element={<AcessoNegado />} />
+
+
+          {/* --- ROTAS PROTEGIDAS --- */}
+          {/* A página de Registro agora é protegida e só pode ser acessada por Diretores */}
+          <Route 
+            path="/registro" 
+            element={
+              <ProtectedRoute allowedRoles={[CargoNames[Cargo.DIRETOR]]}>
+                <Registro />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Rota principal/home, acessível por qualquer usuário logado */}
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Dashboards específicos para cada cargo */}
           <Route 
             path="/dashboard-diretor" 
             element={
-              <ProtectedRoute allowedRoles={['DIRETOR']}>
+              <ProtectedRoute allowedRoles={[CargoNames[Cargo.DIRETOR]]}>
                 <DashboardDiretor />
               </ProtectedRoute>
             } 
           />
-          
           <Route 
             path="/dashboard-coordenador" 
             element={
-              <ProtectedRoute allowedRoles={['COORDENADOR']}>
+              <ProtectedRoute allowedRoles={[CargoNames[Cargo.COORDENADOR]]}>
                 <DashboardCoordenador />
               </ProtectedRoute>
             } 
           />
-          
           <Route 
             path="/dashboard-tecnico" 
             element={
-              <ProtectedRoute allowedRoles={['TECNICO']}>
+              <ProtectedRoute allowedRoles={[CargoNames[Cargo.TECNICO]]}>
                 <DashboardTecnico />
               </ProtectedRoute>
             } 
           />
-          
           <Route 
             path="/dashboard-assistente" 
             element={
-              <ProtectedRoute allowedRoles={['ASSISTENTE']}>
+              <ProtectedRoute allowedRoles={[CargoNames[Cargo.ASSISTENTE]]}>
                 <DashboardAssistente />
               </ProtectedRoute>
             } 
           />
-          
-          
-          {/* Rota raiz - redireciona baseado no cargo */}
-          <Route path="/" element={<RootRedirect />} />
-          
-          {/* Outras rotas protegidas */}
-          <Route 
-            path="/familias/buscar" 
-            element={
-              <ProtectedRoute allowedRoles={['DIRETOR', 'COORDENADOR', 'TECNICO', 'ASSISTENTE']}>
-                {/* Importar componente real quando criado */}
-                <div className="p-8">
-                  <h1 className="text-2xl font-bold">Buscar Famílias</h1>
-                  <p>Página em construção...</p>
-                </div>
-              </ProtectedRoute>
-            } 
-          />
 
-          {/* Rota para páginas não encontradas */}
-          <Route 
-            path="*" 
-            element={
-              <div className="flex items-center justify-center h-screen">
-                <div className="text-center">
-                  <h1 className="text-4xl font-bold text-gray-800 mb-4">404</h1>
-                  <p className="text-gray-600">Página não encontrada</p>
-                  <button 
-                    onClick={() => window.history.back()}
-                    className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  >
-                    Voltar
-                  </button>
-                </div>
-              </div>
-            } 
-          />
+
+          {/* Rota de fallback: se nenhuma rota corresponder, redireciona para o login */}
+          <Route path="*" element={<Login />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
