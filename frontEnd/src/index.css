@@ -6,7 +6,7 @@
   font-weight: 400;
 
   color-scheme: light;
-  color: #213547;
+  color: #ffffff;
   background-color: #ffffff;
 
   font-synthesis: none;
@@ -17,12 +17,12 @@
 
 a {
   font-weight: 500;
-  color: #1d4ed8; /* azul Tailwind padrão */
+  color: #ffffff; /* azul Tailwind padrão */
   text-decoration: inherit;
 }
 
 a:hover {
-  color: #2563eb; /* azul um pouco mais escuro */
+  color: #ffffff; /* azul um pouco mais escuro */
 }
 
 body {

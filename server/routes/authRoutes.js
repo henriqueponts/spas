@@ -23,29 +23,52 @@ router.post('/registro', async (req, res) => {
     }
 })
 
-
 router.post('/login', async (req, res) => {
-    const { cpf, senha} = req.body;
-    try{
-        const db = await connectToDatabase()
-        const [rows] = await db.query('SELECT * FROM usuarios WHERE cpf = ?', [cpf])
+    const { cpf, senha } = req.body;
+    try {
+        const db = await connectToDatabase();
+        const [rows] = await db.query(`
+            SELECT 
+                u.*,
+                c.nome as cargo_nome,
+                e.nome as equipamento_nome
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
+            JOIN equipamento e ON u.equipamento_id = e.id
+            WHERE u.cpf = ? AND u.ativo = true
+        `, [cpf]);
+        
         if (rows.length === 0) {
-            return res.status(404).json({ message: 'Usuário não existe!' })
+            return res.status(404).json({ message: 'Usuário não existe!' });
         }
 
-        const isMatch = await bcrypt.compare(senha, rows[0].senha_hash)
+        const isMatch = await bcrypt.compare(senha, rows[0].senha_hash);
         if (!isMatch) {
-            return res.status(401).json({ message: 'Senha incorreta!' })
+            return res.status(401).json({ message: 'Senha incorreta!' });
         }
 
-        const token = jwt.sign({ id: rows[0].id }, process.env.JWT_SECRET, { expiresIn: '3h' })
+        const token = jwt.sign(
+            { id: rows[0].id }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '3h' }
+        );
 
-
-       return res.status(201).json({ token: token })
+        return res.status(200).json({ 
+            token: token,
+            usuario: {
+                id: rows[0].id,
+                nome: rows[0].nome,
+                cargo_id: rows[0].cargo_id,
+                cargo_nome: rows[0].cargo_nome,
+                equipamento_id: rows[0].equipamento_id,
+                equipamento_nome: rows[0].equipamento_nome
+            }
+        });
     } catch(err) {
-       return res.status(500).json(err)
+        console.error('Erro no login:', err);
+        return res.status(500).json({ message: 'Erro no servidor' });
     }
-})
+});
 
 // Nova rota para buscar os cargos
 router.get('/cargos', async (req, res) => {
