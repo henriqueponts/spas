@@ -52,8 +52,6 @@ FROM usuarios u
 INNER JOIN equipamento e ON u.equipamento_id = e.id
 INNER JOIN cargos c ON u.cargo_id = c.id;
 
-select * from usuarios;
-
 INSERT INTO cargos (nome, descricao) VALUES
 ('EXTERNO','EXTERNO'),('ASSISTENTE','ASSISTENTE'),('TECNICO','TECNICO'), ('COORDENADOR','COORDENADOR'),('DIRETOR','DIRETOR');
 
@@ -66,3 +64,9 @@ VALUES
 ('CREAS Central', 'Centro', 'Praça da Matriz, 200 - Centro', '(17) 3345-5500', 'creas@bebedouro.sp.gov.br'),
 ('Centro POP', 'Centro', 'Rua XV de Novembro, 321 - Centro', '(17) 3345-6600', 'centropop@bebedouro.sp.gov.br'),
 ('Secretaria de Assistência Social', 'Centro', 'Rua São João, 400 - Centro', '(17) 3345-7700', 'assistencia@bebedouro.sp.gov.br');
+
+
+insert into usuarios (nome,cpf,senha_hash,cargo_id,equipamento_id) values  ("Admin","123","$2b$10$0r8J5hKpMlCWFkrH1pEgz.xQW7xh6iQis6N.VznF0.fyZ5OrxYPB2",1,1);
+
+
+select * from usuarios;
