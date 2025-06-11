@@ -21,7 +21,7 @@ export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
 
   // Se o usuário está logado, redireciona para o dashboard apropriado
   if (user) {
-    const route = CargoRoutes[user.cargo_id];
+    const route = CargoRoutes[user.cargo_id as keyof typeof CargoRoutes];
     return <Navigate to={route || '/'} replace />;
   }
 
