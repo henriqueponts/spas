@@ -35,7 +35,7 @@ export const CargoNames = {
 } as const;
 
 export const CargoRoutes = {
-  [Cargo.EXTERNO]: '/dashboard-externo',
+  [Cargo.EXTERNO]: '/beneficios',
   [Cargo.ASSISTENTE]: '/dashboard-assistente',
   [Cargo.TECNICO]: '/dashboard-tecnico',
   [Cargo.COORDENADOR]: '/dashboard-coordenador',
