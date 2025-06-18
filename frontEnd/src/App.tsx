@@ -14,6 +14,8 @@ import AcessoNegado from './pages/AcessoNegado';
 import Registro from './pages/Registro';
 import Home from './pages/Home';
 import Beneficios from './pages/Beneficios'; 
+import CadastroFamilia from './pages/CadastroFamilia';
+import VisualizarFamilia from './pages/VisualizarFamilia';
 import DashboardDiretor from './pages/dashboards/DashboardDiretor';
 import DashboardCoordenador from './pages/dashboards/DashboardCoordenador';
 import DashboardTecnico from './pages/dashboards/DashboardTecnico';
@@ -77,6 +79,9 @@ const AppContent: React.FC = () => {
   useCargoRedirect();
 
   return (
+    
+
+    
     <Routes>
       {/* --- ROTAS PÚBLICAS --- */}
       {/* Login com proteção para usuários já autenticados */}
@@ -89,6 +94,19 @@ const AppContent: React.FC = () => {
         } 
       />
       
+      <Route 
+  path="/familia/:id" 
+  element={
+    <ProtectedRoute allowedRoles={[
+      CargoNames[Cargo.DIRETOR],
+      CargoNames[Cargo.COORDENADOR],
+      CargoNames[Cargo.TECNICO],
+      CargoNames[Cargo.ASSISTENTE]
+    ]}>
+      <VisualizarFamilia />
+    </ProtectedRoute>
+  } 
+/>
       {/* Acesso negado é uma rota especial que todos podem ver */}
       <Route path="/acesso-negado" element={<AcessoNegado />} />
       
@@ -99,6 +117,20 @@ const AppContent: React.FC = () => {
         element={
           <ProtectedRoute allowedRoles={[CargoNames[Cargo.DIRETOR]]}>
             <Registro />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/cadastro/familia" 
+        element={
+          <ProtectedRoute allowedRoles={[
+            CargoNames[Cargo.DIRETOR],
+            CargoNames[Cargo.COORDENADOR],
+            CargoNames[Cargo.TECNICO],
+            CargoNames[Cargo.ASSISTENTE]
+          ]}>
+            <CadastroFamilia />
           </ProtectedRoute>
         } 
       />
