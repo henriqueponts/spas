@@ -38,210 +38,47 @@ CREATE TABLE usuarios (
         ON UPDATE CASCADE
 );
 
--- Tabela de status da família
-CREATE TABLE status_familia (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(50) NOT NULL UNIQUE,
-    ativo BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Tabela de tipos de atendimento
-CREATE TABLE tipos_atendimento (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(100) NOT NULL UNIQUE,
-    descricao TEXT,
-    ativo BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Tabela principal de famílias
+-- Tabela principal para famílias
 CREATE TABLE familias (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    prontuario VARCHAR(50) NOT NULL,
     equipamento_id INT NOT NULL,
-    tecnico_responsavel_id INT,
-    data_cadastro DATE NOT NULL DEFAULT (CURRENT_DATE),
-    data_ultimo_atendimento DATETIME,
-    status_id INT NOT NULL,
-    
-    -- Dados do Responsável Familiar
-    nome_responsavel VARCHAR(150) NOT NULL,
-    cpf_responsavel VARCHAR(14) UNIQUE,
-    rg_responsavel VARCHAR(20),
-    data_nascimento_responsavel DATE,
-    sexo_responsavel ENUM('Feminino', 'Masculino', 'Outro', 'Não Informado') DEFAULT 'Não Informado',
-    estado_civil_responsavel ENUM('Solteiro(a)', 'Casado(a)', 'União Estável', 'Divorciado(a)', 'Viúvo(a)', 'Separado(a)', 'Não Informado') DEFAULT 'Não Informado',
-    escolaridade_responsavel ENUM('Não Alfabetizado', 'Fundamental Incompleto', 'Fundamental Completo', 'Médio Incompleto', 'Médio Completo', 'Superior Incompleto', 'Superior Completo', 'Pós-Graduação', 'Não Informado') DEFAULT 'Não Informado',
-    naturalidade_responsavel VARCHAR(100),
-    nis_responsavel VARCHAR(20),
-    titulo_eleitor_responsavel VARCHAR(30),
-    ctps_responsavel VARCHAR(30),
-    
-    -- Endereço da Família
-    endereco VARCHAR(200),
-    bairro VARCHAR(100),
-    cep VARCHAR(10),
-    cidade VARCHAR(100) DEFAULT 'Bebedouro',
-    uf CHAR(2) DEFAULT 'SP',
-    ponto_referencia VARCHAR(150),
-    tempo_moradia VARCHAR(50),
-    
-    -- Contato
-    telefone VARCHAR(15),
-    telefone_recado VARCHAR(15),
-    email VARCHAR(100),
-    
-    -- Controle
-    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    data_cadastro DATE NOT NULL,
+    prontuario VARCHAR(50),
+    profissional_id INT NOT NULL,
+    situacao VARCHAR(20) NOT NULL DEFAULT 'ativo',
+    observacoes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    UNIQUE KEY uk_prontuario_equipamento (prontuario, equipamento_id),
-    INDEX idx_nome_responsavel (nome_responsavel),
-    INDEX idx_cpf_responsavel (cpf_responsavel),
-    INDEX idx_data_cadastro (data_cadastro),
     
     FOREIGN KEY (equipamento_id) REFERENCES equipamento(id)
+        ON DELETE RESTRICT
         ON UPDATE CASCADE,
-    FOREIGN KEY (tecnico_responsavel_id) REFERENCES usuarios(id)
-        ON UPDATE CASCADE,
-    FOREIGN KEY (status_id) REFERENCES status_familia(id)
+    FOREIGN KEY (profissional_id) REFERENCES usuarios(id)
+        ON DELETE RESTRICT
         ON UPDATE CASCADE
 );
 
--- Tabela de membros da família
-CREATE TABLE membros_familia (
+-- Tabela para pessoas (responsável familiar e membros)
+CREATE TABLE pessoas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL,
-    nome VARCHAR(150) NOT NULL,
-    data_nascimento DATE,
-    sexo ENUM('Feminino', 'Masculino', 'Outro', 'Não Informado') DEFAULT 'Não Informado',
-    parentesco ENUM('Cônjuge', 'Filho(a)', 'Pai', 'Mãe', 'Irmão/Irmã', 'Avô/Avó', 'Neto(a)', 'Sobrinho(a)', 'Tio(a)', 'Primo(a)', 'Outro', 'Não Informado') NOT NULL,
-    escolaridade ENUM('Não Alfabetizado', 'Fundamental Incompleto', 'Fundamental Completo', 'Médio Incompleto', 'Médio Completo', 'Superior Incompleto', 'Superior Completo', 'Pós-Graduação', 'Não Informado') DEFAULT 'Não Informado',
-    ocupacao VARCHAR(100),
-    renda_mensal DECIMAL(10, 2),
+    nome_completo VARCHAR(255) NOT NULL,
+    data_nascimento DATE NOT NULL,
+    sexo ENUM('feminino', 'masculino', 'outro') NOT NULL,
     cpf VARCHAR(14) UNIQUE,
     rg VARCHAR(20),
+    estado_civil VARCHAR(50),
+    escolaridade VARCHAR(50),
+    naturalidade VARCHAR(100),
+    telefone VARCHAR(20),
+    telefone_recado VARCHAR(20),
+    email VARCHAR(100),
     nis VARCHAR(20),
-    titulo_eleitor VARCHAR(30),
-    ctps VARCHAR(30),
-    
-    ativo BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    INDEX idx_familia_id (familia_id),
-    INDEX idx_nome (nome),
-    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON UPDATE CASCADE
-);
-
--- Tabela de condições de saúde
-CREATE TABLE condicoes_saude (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    familia_id INT NOT NULL UNIQUE,
-    
-    possui_deficiencia BOOLEAN DEFAULT FALSE,
-    deficiencia_qual TEXT,
-    realiza_tratamento_saude BOOLEAN DEFAULT FALSE,
-    tratamento_qual TEXT,
-    usa_medicacao_continua BOOLEAN DEFAULT FALSE,
-    medicacao_qual TEXT,
-    depende_cuidados BOOLEAN DEFAULT FALSE,
-    cuidados_quem TEXT,
-    observacoes TEXT,
-    
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON UPDATE CASCADE
-);
-
--- Tabela de condição habitacional
-CREATE TABLE condicao_habitacional (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    familia_id INT NOT NULL UNIQUE,
-    
-    qtd_comodos INT,
-    qtd_dormitorios INT,
-    tipo_construcao ENUM('Alvenaria', 'Madeira', 'Mista', 'Outro'),
-    tipo_construcao_outro VARCHAR(100),
-    condicao_domicilio ENUM('Própria Quitada', 'Própria Financiada', 'Alugada', 'Cedida', 'Ocupada', 'Situação de Rua', 'Outro'),
-    area_conflito BOOLEAN DEFAULT FALSE,
-    energia_eletrica ENUM('Própria', 'Compartilhada', 'Sem Medidor', 'Não Tem'),
-    agua ENUM('Própria', 'Compartilhada', 'Sem Medidor', 'Não Tem'),
-    esgoto ENUM('Rede Pública', 'Fossa Séptica', 'Céu Aberto', 'Não Tem'),
-    coleta_lixo BOOLEAN DEFAULT FALSE,
-    
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON UPDATE CASCADE
-);
-
--- Tabela de condições de trabalho e renda
-CREATE TABLE trabalho_renda (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    familia_id INT NOT NULL UNIQUE,
-    
-    quem_trabalha TEXT,
-    renda_total DECIMAL(10, 2),
-    
-    -- Programas sociais
-    recebe_bpc BOOLEAN DEFAULT FALSE,
-    recebe_bolsa_familia BOOLEAN DEFAULT FALSE,
-    recebe_auxilio_brasil BOOLEAN DEFAULT FALSE,
-    recebe_renda_cidadania BOOLEAN DEFAULT FALSE,
-    recebe_renda_maternidade BOOLEAN DEFAULT FALSE,
-    recebe_auxilio_jovem BOOLEAN DEFAULT FALSE,
-    recebe_outros_programas BOOLEAN DEFAULT FALSE,
-    outros_programas_quais TEXT,
-    
-    -- Despesas mensais
-    despesa_alimentacao DECIMAL(10, 2),
-    despesa_moradia DECIMAL(10, 2),
-    despesa_agua DECIMAL(10, 2),
-    despesa_energia DECIMAL(10, 2),
-    despesa_gas DECIMAL(10, 2),
-    despesa_telefone DECIMAL(10, 2),
-    despesa_internet DECIMAL(10, 2),
-    despesa_transporte DECIMAL(10, 2),
-    despesa_medicacao DECIMAL(10, 2),
-    despesa_outras DECIMAL(10, 2),
-    
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON UPDATE CASCADE
-);
-
--- Tabela de situação social
-CREATE TABLE situacao_social (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    familia_id INT NOT NULL UNIQUE,
-    
-    participa_grupo_religioso BOOLEAN DEFAULT FALSE,
-    grupo_religioso_qual VARCHAR(150),
-    participa_acao_social BOOLEAN DEFAULT FALSE,
-    acao_social_qual VARCHAR(150),
-    
-    -- Acesso a serviços
-    acesso_saude BOOLEAN DEFAULT FALSE,
-    acesso_educacao BOOLEAN DEFAULT FALSE,
-    acesso_assistencia_social BOOLEAN DEFAULT FALSE,
-    acesso_cultura BOOLEAN DEFAULT FALSE,
-    acesso_esporte BOOLEAN DEFAULT FALSE,
-    acesso_lazer BOOLEAN DEFAULT FALSE,
-    
-    observacoes TEXT,
-    
+    titulo_eleitor VARCHAR(20),
+    ctps VARCHAR(20),
+    tipo_membro ENUM('responsavel', 'conjuge', 'filho', 'pai', 'mae', 'irmao', 'avo', 'neto', 'sobrinho', 'tio', 'primo', 'outro') NOT NULL,
+    ocupacao VARCHAR(100),
+    renda_mensal DECIMAL(10,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
@@ -250,99 +87,202 @@ CREATE TABLE situacao_social (
         ON UPDATE CASCADE
 );
 
--- Tabela para registrar atendimentos
-CREATE TABLE atendimentos (
+-- Tabela para endereços
+CREATE TABLE enderecos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    familia_id INT NOT NULL,
-    usuario_id INT NOT NULL,
-    tipo_atendimento_id INT NOT NULL,
-    data_atendimento DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    descricao TEXT,
-    
-    -- Campos específicos para diferentes tipos de atendimento
-    observacoes TEXT,
-    encaminhamentos TEXT,
-    proxima_acao TEXT,
-    data_proximo_atendimento DATE,
-    
+    familia_id INT NOT NULL UNIQUE,
+    logradouro VARCHAR(255) NOT NULL,
+    numero VARCHAR(20),
+    complemento VARCHAR(100),
+    bairro VARCHAR(100) NOT NULL,
+    cidade VARCHAR(100) NOT NULL,
+    uf CHAR(2) NOT NULL,
+    cep VARCHAR(10),
+    referencia VARCHAR(255),
+    tempo_moradia VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    INDEX idx_familia_data (familia_id, data_atendimento),
-    INDEX idx_usuario_data (usuario_id, data_atendimento),
-    INDEX idx_tipo_atendimento (tipo_atendimento_id),
-    
     FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON UPDATE CASCADE,
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        ON UPDATE CASCADE,
-    FOREIGN KEY (tipo_atendimento_id) REFERENCES tipos_atendimento(id)
+        ON DELETE CASCADE
         ON UPDATE CASCADE
 );
 
--- Tabela de documentos anexados
-CREATE TABLE documentos (
+-- Tabela para condições de saúde
+CREATE TABLE saude (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    familia_id INT NOT NULL,
-    usuario_id INT NOT NULL,
-    nome_arquivo VARCHAR(255) NOT NULL,
-    tipo_documento VARCHAR(50),
-    caminho_arquivo VARCHAR(500) NOT NULL,
-    tamanho_arquivo INT,
+    familia_id INT NOT NULL UNIQUE,
+    tem_deficiencia BOOLEAN DEFAULT FALSE,
+    deficiencia_qual VARCHAR(255),
+    tem_tratamento_saude BOOLEAN DEFAULT FALSE,
+    tratamento_qual VARCHAR(255),
+    usa_medicacao_continua BOOLEAN DEFAULT FALSE,
+    medicacao_qual VARCHAR(255),
+    tem_dependente_cuidados BOOLEAN DEFAULT FALSE,
+    dependente_quem VARCHAR(255),
     observacoes TEXT,
-    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    INDEX idx_familia_id (familia_id),
-    
     FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON UPDATE CASCADE,
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        ON DELETE CASCADE
         ON UPDATE CASCADE
 );
 
--- Inserir dados iniciais
-INSERT INTO cargos (nome, descricao) VALUES
-('EXTERNO', 'Usuário externo sem acesso completo'),
-('ATENDENTE', 'Profissional de atendimento'),
-('TÉCNICO', 'Técnico em assistência social'),
-('COORDENADOR', 'Coordenador de equipamento'),
-('DIRETOR', 'Diretor de assistência social');
+-- Tabela para condições habitacionais
+CREATE TABLE habitacao (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL UNIQUE,
+    qtd_comodos INT,
+    qtd_dormitorios INT,
+    tipo_construcao ENUM('alvenaria', 'madeira', 'mista', 'outro'),
+    area_conflito BOOLEAN DEFAULT FALSE,
+    condicao_domicilio ENUM('propria_quitada', 'propria_financiada', 'alugada', 'cedida', 'ocupada', 'situacao_rua'),
+    energia_eletrica ENUM('propria', 'compartilhada', 'sem_medidor', 'nao_tem'),
+    agua ENUM('propria', 'compartilhada', 'sem_medidor', 'nao_tem'),
+    esgoto ENUM('rede', 'fossa', 'ceu_aberto', 'nao_tem'),
+    coleta_lixo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
 
-INSERT INTO equipamento (nome, regiao, endereco, telefone, email) VALUES 
-('CRAS Oeste', 'Oeste', 'Rua das Palmeiras, 123 - Bairro Oeste', '(17) 3345-1100', 'cras.oeste@bebedouro.sp.gov.br'),
-('CRAS Leste', 'Leste', 'Avenida Brasil, 456 - Bairro Leste', '(17) 3345-2200', 'cras.leste@bebedouro.sp.gov.br'),
-('CRAS Norte', 'Norte', 'Rua Amazonas, 789 - Bairro Norte', '(17) 3345-3300', 'cras.norte@bebedouro.sp.gov.br'),
-('CRAS Sul', 'Sul', 'Rua Rio de Janeiro, 101 - Bairro Sul', '(17) 3345-4400', 'cras.sul@bebedouro.sp.gov.br'),
-('CREAS Central', 'Centro', 'Praça da Matriz, 200 - Centro', '(17) 3345-5500', 'creas@bebedouro.sp.gov.br'),
-('Centro POP', 'Centro', 'Rua XV de Novembro, 321 - Centro', '(17) 3345-6600', 'centropop@bebedouro.sp.gov.br'),
-('Secretaria de Assistência Social', 'Centro', 'Rua São João, 400 - Centro', '(17) 3345-7700', 'assistencia@bebedouro.sp.gov.br');
+-- Tabela para trabalho e renda
+CREATE TABLE trabalho_renda (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL UNIQUE,
+    quem_trabalha TEXT,
+    rendimento_total DECIMAL(10,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
 
-INSERT INTO status_familia (nome) VALUES
-('Ativo'),
-('Inativo'),
-('Transferido'),
-('Suspenso'),
-('Em Acompanhamento');
+-- Tabela para programas sociais recebidos
+CREATE TABLE programas_sociais (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL,
+    programa ENUM('bpc', 'bolsa_familia', 'auxilio_brasil', 'rm', 'rc', 'aj', 'outro'),
+    valor DECIMAL(10,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
 
-INSERT INTO tipos_atendimento (nome, descricao) VALUES
-('Cadastro Inicial', 'Primeiro atendimento para cadastro da família'),
-('Atualização Cadastral', 'Atualização de dados da família'),
-('Atendimento Técnico', 'Atendimento técnico especializado'),
-('Visita Domiciliar', 'Visita realizada no domicílio da família'),
-('Atendimento Psicossocial', 'Atendimento psicológico e social'),
-('Orientação', 'Orientação sobre direitos e serviços'),
-('Encaminhamento', 'Encaminhamento para outros serviços'),
-('Acompanhamento', 'Acompanhamento sistemático'),
-('Busca Ativa', 'Busca ativa de famílias'),
-('Outros', 'Outros tipos de atendimento');
+-- Tabela para despesas mensais
+CREATE TABLE despesas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL,
+    tipo ENUM('alimentacao', 'moradia', 'energia', 'agua', 'gas', 'telefone', 'internet', 'transporte', 'medicacao', 'outros'),
+    valor DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
 
--- Inserir usuário administrador
-insert into usuarios (nome,cpf,senha_hash,cargo_id,equipamento_id) values  ("Admin","123","$2b$10$0r8J5hKpMlCWFkrH1pEgz.xQW7xh6iQis6N.VznF0.fyZ5OrxYPB2",1,1);
+-- Tabela para situação social
+CREATE TABLE situacao_social (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL UNIQUE,
+    participa_religiao BOOLEAN DEFAULT FALSE,
+    religiao_qual VARCHAR(255),
+    participa_acao_social BOOLEAN DEFAULT FALSE,
+    acao_social_qual VARCHAR(255),
+    observacoes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
 
--- Consultas úteis para verificação
--- SELECT u.nome AS nome_usuario, e.nome AS nome_equipamento, c.nome AS nome_cargo
--- FROM usuarios u
--- INNER JOIN equipamento e ON u.equipamento_id = e.id
--- INNER JOIN cargos c ON u.cargo_id = c.id;
+-- Tabela para serviços públicos acessados
+CREATE TABLE servicos_publicos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL,
+    tipo ENUM('saude', 'educacao', 'assistencia_social', 'cultura', 'esporte', 'lazer'),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    UNIQUE KEY (familia_id, tipo)
+);
+
+-- Tabela para evolução do prontuário
+CREATE TABLE evolucoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL,
+    usuario_id INT NOT NULL,
+    data_evolucao DATE NOT NULL,
+    hora_evolucao TIME NOT NULL,
+    descricao TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+);
+
+-- Tabela para benefícios concedidos
+CREATE TABLE beneficios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL,
+    tipo_beneficio ENUM('cesta_basica', 'auxilio_funeral', 'auxilio_natalidade', 'passagem', 'outro'),
+    data_concessao DATE NOT NULL,
+    justificativa TEXT,
+    responsavel_id INT NOT NULL,
+    status ENUM('concedido', 'entregue', 'cancelado') DEFAULT 'concedido',
+    observacoes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    FOREIGN KEY (responsavel_id) REFERENCES usuarios(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+);
+
+-- Tabela para encaminhamentos
+CREATE TABLE encaminhamentos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    familia_id INT NOT NULL,
+    evolucao_id INT,
+    local_encaminhamento VARCHAR(255) NOT NULL,
+    motivo TEXT NOT NULL,
+    data_encaminhamento DATE NOT NULL,
+    responsavel_id INT NOT NULL,
+    status ENUM('pendente', 'realizado', 'cancelado') DEFAULT 'pendente',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    FOREIGN KEY (evolucao_id) REFERENCES evolucoes(id)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE,
+    FOREIGN KEY (responsavel_id) REFERENCES usuarios(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+);
