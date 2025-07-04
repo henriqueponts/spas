@@ -893,4 +893,113 @@ router.get('/familias/:id', verifyToken, async (req, res) => {
     }
 });
 
+router.get('/familias/:id/evolucoes', verifyToken, async (req, res) => {
+    console.log('🔍 Buscando evoluções da família:', req.params.id);
+    
+    const db = await connectToDatabase();
+    
+    try {
+        const familia_id = parseInt(req.params.id);
+        
+        if (isNaN(familia_id)) {
+            return res.status(400).json({ message: 'ID da família inválido' });
+        }
+
+        // Buscar evoluções com informações do usuário
+        const [evolucoes] = await db.query(`
+            SELECT 
+                e.*,
+                u.nome as usuario_nome,
+                c.nome as usuario_cargo
+            FROM evolucoes e
+            JOIN usuarios u ON e.usuario_id = u.id
+            JOIN cargos c ON u.cargo_id = c.id
+            WHERE e.familia_id = ?
+            ORDER BY e.data_evolucao DESC, e.hora_evolucao DESC
+        `, [familia_id]);
+
+        console.log(`✅ ${evolucoes.length} evoluções encontradas`);
+        res.json(evolucoes);
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar evoluções:', error);
+        res.status(500).json({ 
+            message: 'Erro ao buscar evoluções',
+            error: error.message 
+        });
+    }
+});
+
+// Criar nova evolução
+router.post('/familias/:id/evolucoes', verifyToken, async (req, res) => {
+    console.log('📝 Criando nova evolução para família:', req.params.id);
+    
+    const db = await connectToDatabase();
+    
+    try {
+        const familia_id = parseInt(req.params.id);
+        const usuario_id = req.userId; // ID do usuário autenticado
+        const { descricao } = req.body;
+        
+        if (isNaN(familia_id)) {
+            return res.status(400).json({ message: 'ID da família inválido' });
+        }
+
+        if (!descricao || descricao.trim() === '') {
+            return res.status(400).json({ message: 'Descrição é obrigatória' });
+        }
+
+        // Verificar se o usuário é técnico (cargo_id = 3)
+        const [userResult] = await db.query(
+            'SELECT cargo_id FROM usuarios WHERE id = ?',
+            [usuario_id]
+        );
+
+        if (userResult.length === 0 || userResult[0].cargo_id !== 3) {
+            return res.status(403).json({ 
+                message: 'Apenas técnicos podem registrar evoluções' 
+            });
+        }
+
+        // Verificar se a família existe
+        const [familiaResult] = await db.query(
+            'SELECT id FROM familias WHERE id = ?',
+            [familia_id]
+        );
+
+        if (familiaResult.length === 0) {
+            return res.status(404).json({ message: 'Família não encontrada' });
+        }
+
+        // Inserir a evolução
+        const dataAtual = new Date();
+        const data_evolucao = dataAtual.toISOString().split('T')[0]; // YYYY-MM-DD
+        const hora_evolucao = dataAtual.toTimeString().split(' ')[0]; // HH:MM:SS
+
+        const [result] = await db.query(`
+            INSERT INTO evolucoes (
+                familia_id, 
+                usuario_id, 
+                data_evolucao, 
+                hora_evolucao, 
+                descricao
+            ) VALUES (?, ?, ?, ?, ?)
+        `, [familia_id, usuario_id, data_evolucao, hora_evolucao, descricao]);
+
+        console.log('✅ Evolução criada com ID:', result.insertId);
+
+        res.status(201).json({
+            message: 'Evolução registrada com sucesso',
+            id: result.insertId
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao criar evolução:', error);
+        res.status(500).json({ 
+            message: 'Erro ao registrar evolução',
+            error: error.message 
+        });
+    }
+});
+
 export default router
