@@ -2,7 +2,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { CargoRoutes } from '../types';
 
 interface PublicRouteProps {
   children: React.ReactNode;
@@ -11,20 +10,20 @@ interface PublicRouteProps {
 export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
 
+  // Enquanto está carregando, mostra um spinner
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-lg">Carregando...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
-  // Se o usuário está logado, redireciona para o dashboard apropriado
+  // Se o usuário está autenticado, redireciona para home
   if (user) {
-    const route = CargoRoutes[user.cargo_id as keyof typeof CargoRoutes];
-    return <Navigate to={route || '/'} replace />;
+    return <Navigate to="/home" replace />;
   }
 
-  // Se não está logado, mostra a página pública (login)
+  // Se não está autenticado, mostra a página pública (login)
   return <>{children}</>;
 };
