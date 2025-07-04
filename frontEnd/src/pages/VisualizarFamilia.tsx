@@ -149,11 +149,25 @@ const VisualizarFamilia: React.FC = () => {
     return new Date(data).toLocaleDateString('pt-BR');
   };
 
-  const formatarMoeda = (valor: number) => {
+// Função auxiliar para garantir que o valor é um número
+  const garantirNumero = (valor: any): number => {
+    if (typeof valor === 'number' && !isNaN(valor)) {
+      return valor;
+    }
+    if (typeof valor === 'string') {
+      const numero = parseFloat(valor.replace(',', '.'));
+      return isNaN(numero) ? 0 : numero;
+    }
+    return 0;
+  };
+
+  // Função formatarMoeda atualizada
+  const formatarMoeda = (valor: number | string | undefined | null) => {
+    const numeroValido = garantirNumero(valor);
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
-    }).format(valor);
+    }).format(numeroValido);
   };
 
   const calcularIdade = (dataNascimento: string) => {
@@ -604,6 +618,7 @@ const VisualizarFamilia: React.FC = () => {
           </div>
         )}
 
+
         {/* Despesas */}
         {familia.despesas.length > 0 && (
           <div className="bg-white shadow rounded-lg mb-8">
@@ -627,7 +642,11 @@ const VisualizarFamilia: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <p className="font-medium text-gray-900">Total de Despesas:</p>
                   <p className="text-xl font-bold text-red-600">
-                    {formatarMoeda(familia.despesas.reduce((total, despesa) => total + despesa.valor, 0))}
+                    {formatarMoeda(
+                      familia.despesas.reduce((total, despesa) => {
+                        return total + garantirNumero(despesa.valor);
+                      }, 0)
+                    )}
                   </p>
                 </div>
               </div>
@@ -685,46 +704,7 @@ const VisualizarFamilia: React.FC = () => {
           </div>
         </div>
 
-        {/* Resumo Financeiro */}
-        <div className="bg-white shadow rounded-lg mb-8">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h2 className="text-xl font-semibold text-gray-900">Resumo Financeiro</h2>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-500">Renda Total</p>
-                <p className="mt-2 text-2xl font-bold text-green-600">
-                  {formatarMoeda(
-                    familia.trabalho_renda.rendimento_total + 
-                    familia.programas_sociais.reduce((total, programa) => total + programa.valor, 0)
-                  )}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-500">Despesas Total</p>
-                <p className="mt-2 text-2xl font-bold text-red-600">
-                  {formatarMoeda(familia.despesas.reduce((total, despesa) => total + despesa.valor, 0))}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-500">Saldo</p>
-                <p className={`mt-2 text-2xl font-bold ${
-                  (familia.trabalho_renda.rendimento_total + 
-                   familia.programas_sociais.reduce((total, programa) => total + programa.valor, 0) -
-                   familia.despesas.reduce((total, despesa) => total + despesa.valor, 0)) >= 0 
-                  ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {formatarMoeda(
-                    familia.trabalho_renda.rendimento_total + 
-                    familia.programas_sociais.reduce((total, programa) => total + programa.valor, 0) -
-                    familia.despesas.reduce((total, despesa) => total + despesa.valor, 0)
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+
 
         {/* Rodapé com informações do sistema */}
         <div className="bg-white shadow rounded-lg">

@@ -132,6 +132,99 @@ router.get('/test-familia', (req, res) => {
     res.json({ message: 'Rota de teste funcionando!' });
 });
 
+router.get('/familias', verifyToken, async (req, res) => {
+    console.log('📋 GET /auth/familias - Listando famílias');
+    
+    try {
+        const db = await connectToDatabase();
+        
+        // Query principal - buscar famílias
+        const [familias] = await db.query(`
+            SELECT 
+                f.id,
+                f.prontuario,
+                f.data_cadastro,
+                f.data_atendimento,
+                f.situacao,
+                e.nome as equipamento_nome,
+                e.regiao as equipamento_regiao,
+                u.nome as profissional_nome
+            FROM familias f
+            INNER JOIN equipamento e ON f.equipamento_id = e.id
+            INNER JOIN usuarios u ON f.profissional_id = u.id
+            ORDER BY f.id DESC
+        `);
+
+        console.log(`✅ ${familias.length} famílias encontradas`);
+
+        // Para cada família, buscar dados complementares
+        const familiasCompletas = [];
+        
+        for (const familia of familias) {
+            // Buscar responsável
+            const [responsavel] = await db.query(
+                'SELECT nome_completo, cpf, telefone FROM pessoas WHERE familia_id = ? AND tipo_membro = "responsavel" LIMIT 1',
+                [familia.id]
+            );
+
+            // Buscar endereço
+            const [endereco] = await db.query(
+                'SELECT logradouro, numero, bairro, cidade, uf FROM enderecos WHERE familia_id = ? LIMIT 1',
+                [familia.id]
+            );
+
+            // Buscar integrantes
+            const [integrantes] = await db.query(
+                'SELECT nome_completo, tipo_membro FROM pessoas WHERE familia_id = ? AND tipo_membro != "responsavel"',
+                [familia.id]
+            );
+
+            // Buscar renda
+            const [renda] = await db.query(
+                'SELECT rendimento_total FROM trabalho_renda WHERE familia_id = ? LIMIT 1',
+                [familia.id]
+            );
+
+            familiasCompletas.push({
+                id: familia.id,
+                prontuario: familia.prontuario,
+                data_cadastro: familia.data_cadastro,
+                data_atendimento: familia.data_atendimento,
+                situacao: familia.situacao,
+                equipamento_nome: familia.equipamento_nome,
+                equipamento_regiao: familia.equipamento_regiao,
+                profissional_nome: familia.profissional_nome,
+                responsavel: responsavel[0] || {
+                    nome_completo: 'Não informado',
+                    cpf: 'Não informado',
+                    telefone: 'Não informado'
+                },
+                endereco: endereco[0] || {
+                    logradouro: 'Não informado',
+                    numero: '',
+                    bairro: 'Não informado',
+                    cidade: 'Não informado',
+                    uf: ''
+                },
+                integrantes: integrantes || [],
+                trabalho_renda: renda[0] || {
+                    rendimento_total: 0
+                }
+            });
+        }
+
+        res.json(familiasCompletas);
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar famílias:', error);
+        res.status(500).json({ 
+            message: 'Erro ao buscar famílias', 
+            error: error.message 
+        });
+    }
+});
+
+
 // ============================================
 // 2. ROTAS CORRIGIDAS COM LOGS DE DEBUG
 // ============================================
