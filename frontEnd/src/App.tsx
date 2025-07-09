@@ -69,7 +69,7 @@ const RootRedirect: React.FC = () => {
       if (!user) {
         navigate('/login', { replace: true });
       } else {
-        navigate('/home', { replace: true });
+        navigate('/familias', { replace: true });
       }
     }
   }, [user, loading, navigate]);
