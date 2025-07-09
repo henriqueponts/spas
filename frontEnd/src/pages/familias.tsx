@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, Filter, Plus, Users, MapPin, Phone, DollarSign, Calendar, Eye, FileText, Heart } from "lucide-react"
+import { Search, Filter, Plus, Users, MapPin, Phone, DollarSign, Calendar, FileText, Heart } from "lucide-react"
 import api from "../services/api"
 
 interface Responsavel {
@@ -337,18 +337,18 @@ const Familias: React.FC = () => {
                       }}
                       className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 group"
                     >
-                      <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                      Ver Detalhes
+                      <FileText className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                      Prontuário
                     </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigate(`/familia/${familia.id}/evolucoes`)
+                        navigate(`/beneficios`)
                       }}
                       className="flex-1 bg-gray-100 text-gray-700 px-4 py-3 rounded-xl hover:bg-gray-200 transition-colors text-sm font-medium flex items-center justify-center gap-2 group"
                     >
                       <FileText className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                      Evolução
+                      Benefícios
                     </button>
                   </div>
                 </div>
