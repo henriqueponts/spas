@@ -893,6 +893,314 @@ router.get('/familias/:id', verifyToken, async (req, res) => {
     }
 });
 
+// ============================================
+// ROTA PARA ATUALIZAR FAMÍLIA EXISTENTE
+// ============================================
+router.put('/familias/:id', verifyToken, async (req, res) => {
+    console.log('🔄 ROTA PUT /familias/:id CHAMADA!');
+    console.log('🆔 ID da família:', req.params.id);
+    console.log('🔑 User ID do token:', req.userId);
+    console.log('📦 Body recebido:', JSON.stringify(req.body, null, 2));
+
+    const db = await connectToDatabase();
+    
+    try {
+        const familia_id = parseInt(req.params.id);
+        
+        if (isNaN(familia_id)) {
+            return res.status(400).json({ message: 'ID da família inválido' });
+        }
+
+        console.log('🔄 Iniciando transação para atualização...');
+        await db.beginTransaction();
+
+        const {
+            data_atendimento,
+            profissional_id,
+            equipamento_id,
+            responsavel,
+            endereco,
+            integrantes,
+            saude,
+            habitacao,
+            trabalho_renda,
+            programas_sociais,
+            despesas,
+            situacao_social
+        } = req.body;
+
+        // Validações básicas
+        if (!responsavel?.nome_completo) {
+            throw new Error('Nome do responsável é obrigatório');
+        }
+        if (!endereco?.logradouro) {
+            throw new Error('Logradouro é obrigatório');
+        }
+        if (!profissional_id) {
+            throw new Error('Profissional responsável é obrigatório');
+        }
+        if (!equipamento_id) {
+            throw new Error('Equipamento é obrigatório');
+        }
+
+        console.log('✅ Validações básicas passaram');
+
+        // Verificar se a família existe
+        const [familiaExiste] = await db.query('SELECT id FROM familias WHERE id = ?', [familia_id]);
+        if (familiaExiste.length === 0) {
+            throw new Error('Família não encontrada');
+        }
+
+        // 1. Atualizar dados básicos da família
+        console.log('👨‍👩‍👧‍👦 Atualizando dados básicos da família...');
+        await db.query(`
+            UPDATE familias SET 
+                equipamento_id = ?,
+                data_atendimento = ?,
+                profissional_id = ?,
+                data_atualizacao = NOW()
+            WHERE id = ?
+        `, [equipamento_id, data_atendimento, profissional_id, familia_id]);
+        console.log('✅ Dados básicos da família atualizados');
+
+        // 2. Atualizar responsável familiar
+        console.log('👤 Atualizando responsável...');
+        await db.query(`
+            UPDATE pessoas SET 
+                nome_completo = ?, data_nascimento = ?, sexo = ?, cpf = ?, rg = ?,
+                estado_civil = ?, escolaridade = ?, naturalidade = ?, telefone = ?, 
+                telefone_recado = ?, email = ?, nis = ?, titulo_eleitor = ?, ctps = ?, 
+                ocupacao = ?, renda_mensal = ?
+            WHERE familia_id = ? AND tipo_membro = 'responsavel'
+        `, [
+            responsavel.nome_completo || '',
+            responsavel.data_nascimento || null,
+            responsavel.sexo || 'feminino',
+            responsavel.cpf || '',
+            responsavel.rg || '',
+            responsavel.estado_civil || '',
+            responsavel.escolaridade || '',
+            responsavel.naturalidade || '',
+            responsavel.telefone || '',
+            responsavel.telefone_recado || '',
+            responsavel.email || '',
+            responsavel.nis || '',
+            responsavel.titulo_eleitor || '',
+            responsavel.ctps || '',
+            responsavel.ocupacao || '',
+            responsavel.renda_mensal || 0,
+            familia_id
+        ]);
+        console.log('✅ Responsável atualizado');
+
+        // 3. Atualizar endereço
+        console.log('🏠 Atualizando endereço...');
+        await db.query(`
+            UPDATE enderecos SET 
+                logradouro = ?, numero = ?, complemento = ?, bairro = ?, cidade = ?,
+                uf = ?, cep = ?, referencia = ?, tempo_moradia = ?
+            WHERE familia_id = ?
+        `, [
+            endereco.logradouro || '',
+            endereco.numero || '',
+            endereco.complemento || '',
+            endereco.bairro || '',
+            endereco.cidade || '',
+            endereco.uf || '',
+            endereco.cep || '',
+            endereco.referencia || '',
+            endereco.tempo_moradia || '',
+            familia_id
+        ]);
+        console.log('✅ Endereço atualizado');
+
+        // 4. Atualizar dados de saúde
+        console.log('🏥 Atualizando dados de saúde...');
+        await db.query(`
+            UPDATE saude SET 
+                tem_deficiencia = ?, deficiencia_qual = ?, tem_tratamento_saude = ?,
+                tratamento_qual = ?, usa_medicacao_continua = ?, medicacao_qual = ?,
+                tem_dependente_cuidados = ?, dependente_quem = ?, observacoes = ?
+            WHERE familia_id = ?
+        `, [
+            saude?.tem_deficiencia || false,
+            saude?.deficiencia_qual || '',
+            saude?.tem_tratamento_saude || false,
+            saude?.tratamento_qual || '',
+            saude?.usa_medicacao_continua || false,
+            saude?.medicacao_qual || '',
+            saude?.tem_dependente_cuidados || false,
+            saude?.dependente_quem || '',
+            saude?.observacoes || '',
+            familia_id
+        ]);
+        console.log('✅ Dados de saúde atualizados');
+
+        // 5. Atualizar dados de habitação
+        console.log('🏡 Atualizando dados de habitação...');
+        const tipo_construcao_str = Array.isArray(habitacao?.tipo_construcao) 
+            ? habitacao.tipo_construcao.join(',') : '';
+        const condicao_domicilio_str = Array.isArray(habitacao?.condicao_domicilio) 
+            ? habitacao.condicao_domicilio.join(',') : '';
+
+        await db.query(`
+            UPDATE habitacao SET 
+                qtd_comodos = ?, qtd_dormitorios = ?, tipo_construcao = ?,
+                area_conflito = ?, condicao_domicilio = ?, energia_eletrica = ?, 
+                agua = ?, esgoto = ?, coleta_lixo = ?
+            WHERE familia_id = ?
+        `, [
+            habitacao?.qtd_comodos || 0,
+            habitacao?.qtd_dormitorios || 0,
+            tipo_construcao_str,
+            habitacao?.area_conflito || false,
+            condicao_domicilio_str,
+            habitacao?.energia_eletrica || 'propria',
+            habitacao?.agua || 'propria',
+            habitacao?.esgoto || 'rede',
+            habitacao?.coleta_lixo || true,
+            familia_id
+        ]);
+        console.log('✅ Dados de habitação atualizados');
+
+        // 6. Atualizar trabalho e renda
+        console.log('💼 Atualizando trabalho e renda...');
+        await db.query(`
+            UPDATE trabalho_renda SET 
+                quem_trabalha = ?, rendimento_total = ?
+            WHERE familia_id = ?
+        `, [
+            trabalho_renda?.quem_trabalha || '',
+            trabalho_renda?.rendimento_total || 0,
+            familia_id
+        ]);
+        console.log('✅ Trabalho e renda atualizados');
+
+        // 7. Atualizar situação social
+        console.log('👥 Atualizando situação social...');
+        await db.query(`
+            UPDATE situacao_social SET 
+                participa_religiao = ?, religiao_qual = ?, participa_acao_social = ?,
+                acao_social_qual = ?, observacoes = ?
+            WHERE familia_id = ?
+        `, [
+            situacao_social?.participa_religiao || false,
+            situacao_social?.religiao_qual || '',
+            situacao_social?.participa_acao_social || false,
+            situacao_social?.acao_social_qual || '',
+            situacao_social?.observacoes || '',
+            familia_id
+        ]);
+        console.log('✅ Situação social atualizada');
+
+        // 8. Atualizar integrantes (remover todos e inserir novamente)
+        console.log('👨‍👩‍👧‍👦 Atualizando integrantes...');
+        await db.query('DELETE FROM pessoas WHERE familia_id = ? AND tipo_membro != "responsavel"', [familia_id]);
+        
+        if (integrantes && Array.isArray(integrantes) && integrantes.length > 0) {
+            for (let i = 0; i < integrantes.length; i++) {
+                const integrante = integrantes[i];
+                await db.query(`
+                    INSERT INTO pessoas (
+                        familia_id, nome_completo, data_nascimento, sexo, cpf, rg,
+                        estado_civil, escolaridade, naturalidade, telefone, telefone_recado,
+                        email, nis, titulo_eleitor, ctps, tipo_membro, ocupacao, renda_mensal
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    familia_id,
+                    integrante.nome_completo || '',
+                    integrante.data_nascimento || null,
+                    integrante.sexo || 'feminino',
+                    integrante.cpf || '',
+                    integrante.rg || '',
+                    integrante.estado_civil || '',
+                    integrante.escolaridade || '',
+                    integrante.naturalidade || '',
+                    integrante.telefone || '',
+                    integrante.telefone_recado || '',
+                    integrante.email || '',
+                    integrante.nis || '',
+                    integrante.titulo_eleitor || '',
+                    integrante.ctps || '',
+                    integrante.tipo_membro || 'filho',
+                    integrante.ocupacao || '',
+                    integrante.renda_mensal || 0
+                ]);
+            }
+        }
+        console.log('✅ Integrantes atualizados');
+
+        // 9. Atualizar programas sociais (remover todos e inserir novamente)
+        console.log('🤝 Atualizando programas sociais...');
+        await db.query('DELETE FROM familia_programas_sociais WHERE familia_id = ?', [familia_id]);
+        
+        if (programas_sociais && Array.isArray(programas_sociais) && programas_sociais.length > 0) {
+            for (const programa of programas_sociais) {
+                await db.query(`
+                    INSERT INTO familia_programas_sociais (
+                        familia_id, programa_id, valor, ativo
+                    ) VALUES (?, ?, ?, TRUE)
+                `, [familia_id, programa.programa_id, programa.valor || 0]);
+            }
+        }
+        console.log('✅ Programas sociais atualizados');
+
+        // 10. Atualizar despesas (remover todas e inserir novamente)
+        console.log('💰 Atualizando despesas...');
+        await db.query('DELETE FROM familia_despesas WHERE familia_id = ?', [familia_id]);
+        
+        if (despesas && Array.isArray(despesas) && despesas.length > 0) {
+            for (const despesa of despesas) {
+                if (despesa.valor > 0) {
+                    await db.query(`
+                        INSERT INTO familia_despesas (
+                            familia_id, tipo_despesa_id, valor
+                        ) VALUES (?, ?, ?)
+                    `, [familia_id, despesa.tipo_despesa_id, despesa.valor]);
+                }
+            }
+        }
+        console.log('✅ Despesas atualizadas');
+
+        // 11. Atualizar serviços públicos (remover todos e inserir novamente)
+        console.log('🏛️ Atualizando serviços públicos...');
+        await db.query('DELETE FROM familia_servicos_publicos WHERE familia_id = ?', [familia_id]);
+        
+        if (situacao_social?.servicos_publicos && Array.isArray(situacao_social.servicos_publicos)) {
+            for (const servico of situacao_social.servicos_publicos) {
+                await db.query(`
+                    INSERT INTO familia_servicos_publicos (familia_id, tipo)
+                    VALUES (?, ?)
+                `, [familia_id, servico]);
+            }
+        }
+        console.log('✅ Serviços públicos atualizados');
+
+        console.log('✅ Fazendo commit da transação...');
+        await db.commit();
+
+        console.log('🎉 Família atualizada com sucesso! ID:', familia_id);
+        res.status(200).json({
+            message: 'Família atualizada com sucesso!',
+            familia_id: familia_id
+        });
+
+    } catch (error) {
+        console.log('❌ Erro na atualização, fazendo rollback...');
+        await db.rollback();
+        console.error('💥 Erro detalhado:', error);
+
+        if (error.code === 'ER_DUP_ENTRY') {
+            res.status(400).json({ message: 'CPF já cadastrado no sistema' });
+        } else if (error.message) {
+            res.status(400).json({ message: error.message });
+        } else {
+            res.status(500).json({ message: 'Erro interno do servidor' });
+        }
+    }
+});
+
+
 router.get('/familias/:id/evolucoes', verifyToken, async (req, res) => {
     console.log('🔍 Buscando evoluções da família:', req.params.id);
     

@@ -21,6 +21,7 @@ import DashboardCoordenador from './pages/dashboards/DashboardCoordenador';
 import DashboardTecnico from './pages/dashboards/DashboardTecnico';
 import DashboardAssistente from './pages/dashboards/DashboardAssistente';
 import Familias from './pages/Familias';
+import AlterarFamilia from './pages/AlterarFamilia';
 
 // Hook para proteger navegação baseado no cargo
 const useCargoRedirect = () => {
@@ -141,6 +142,20 @@ const AppContent: React.FC = () => {
             CargoNames[Cargo.ASSISTENTE]
           ]}>
             <VisualizarFamilia />
+          </ProtectedRoute>
+        } 
+      />
+
+            <Route 
+        path="/familia/:id/editar" 
+        element={
+          <ProtectedRoute allowedRoles={[
+            CargoNames[Cargo.DIRETOR],
+            CargoNames[Cargo.COORDENADOR],
+            CargoNames[Cargo.TECNICO],
+            CargoNames[Cargo.ASSISTENTE]
+          ]}>
+            <AlterarFamilia />
           </ProtectedRoute>
         } 
       />
