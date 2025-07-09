@@ -313,7 +313,7 @@ const VisualizarFamilia: React.FC = () => {
           <p className="text-gray-600">{familia.responsavel.nome_completo}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="default" onClick={() => navigate(`/familias/${id}/editar`)}>
+          <Button variant="default" onClick={() => navigate(`/familia/${id}/editar`)}>
             <Pencil className="h-4 w-4 mr-2" /> Editar
           </Button>
         </div>

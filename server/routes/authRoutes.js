@@ -799,13 +799,17 @@ router.get('/familias/:id', verifyToken, async (req, res) => {
             data_cadastro: familia.data_cadastro,
             data_atendimento: familia.data_atendimento,
             situacao: familia.situacao,
+            profissional_id: familia.profissional_id, // CORRIGIDO: Adicionado ID do profissional
+            equipamento_id: familia.equipamento_id, // CORRIGIDO: Adicionado ID do equipamento
             
             // Equipamento e profissional
             equipamento: {
+                id: familia.equipamento_id,
                 nome: familia.equipamento_nome,
                 regiao: familia.equipamento_regiao
             },
             profissional: {
+                id: familia.profissional_id,
                 nome: familia.profissional_nome,
                 cargo_nome: familia.profissional_cargo
             },
@@ -853,6 +857,7 @@ router.get('/familias/:id', verifyToken, async (req, res) => {
             
             // Programas sociais
             programas_sociais: programasSociaisResult.map(programa => ({
+                programa_id: programa.programa_id, // CORRIGIDO
                 programa_nome: programa.programa_nome,
                 programa_codigo: programa.programa_codigo,
                 valor: programa.valor
@@ -860,6 +865,7 @@ router.get('/familias/:id', verifyToken, async (req, res) => {
             
             // Despesas
             despesas: despesasResult.map(despesa => ({
+                tipo_despesa_id: despesa.tipo_despesa_id, // CORRIGIDO
                 tipo_nome: despesa.tipo_nome,
                 tipo_codigo: despesa.tipo_codigo,
                 valor: despesa.valor
@@ -958,7 +964,7 @@ router.put('/familias/:id', verifyToken, async (req, res) => {
                 equipamento_id = ?,
                 data_atendimento = ?,
                 profissional_id = ?,
-                data_atualizacao = NOW()
+                updated_at = NOW()
             WHERE id = ?
         `, [equipamento_id, data_atendimento, profissional_id, familia_id]);
         console.log('✅ Dados básicos da família atualizados');

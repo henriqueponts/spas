@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
+  Loader2,
 } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../components/ui/Card"
@@ -72,6 +73,7 @@ interface IntegranteFamiliar {
 }
 
 interface DadosFamilia {
+  id?: number
   data_atendimento: string
   profissional_id: number
   prontuario: string
@@ -237,14 +239,23 @@ const AlterarFamilia: React.FC = () => {
 
   // Carregar dados iniciais e dados da família
   useEffect(() => {
-    carregarDadosIniciais()
     if (id) {
-      carregarDadosFamilia()
+      console.log("🔍 ID da família obtido da URL:", id)
+      carregarDados()
+    } else {
+      console.error("❌ ID da família não encontrado na URL")
+      showMessage("ID da família não encontrado na URL", "error")
+      navigate("/familias")
     }
-  }, [id])
+  }, [id, navigate])
 
-  const carregarDadosIniciais = async () => {
+  const carregarDados = async () => {
     try {
+      setLoadingData(true)
+      console.log("📋 Iniciando carregamento de dados...")
+
+      // Carregar dados auxiliares
+      console.log("🔄 Carregando dados auxiliares...")
       const [equipamentosRes, usuariosRes, programasRes, despesasRes] = await Promise.all([
         api.get("/auth/equipamentos"),
         api.get("/auth/usuarios/tecnicos"),
@@ -252,64 +263,141 @@ const AlterarFamilia: React.FC = () => {
         api.get("/auth/tipos-despesas"),
       ])
 
+      const loadedProgramas = Array.isArray(programasRes.data) ? programasRes.data : []
+      const loadedDespesas = Array.isArray(despesasRes.data) ? despesasRes.data : []
+
+      console.log("✅ Dados auxiliares carregados")
       setEquipamentos(Array.isArray(equipamentosRes.data) ? equipamentosRes.data : [])
       setUsuarios(Array.isArray(usuariosRes.data) ? usuariosRes.data : [])
-      setProgramasSociais(Array.isArray(programasRes.data) ? programasRes.data : [])
-      setTiposDespesas(Array.isArray(despesasRes.data) ? despesasRes.data : [])
-    } catch (error) {
-      console.error("Erro ao carregar dados iniciais:", error)
-      showMessage(
-        `Erro ao carregar dados iniciais: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
-        "error",
-      )
-    }
-  }
+      setProgramasSociais(loadedProgramas)
+      setTiposDespesas(loadedDespesas)
 
-  const carregarDadosFamilia = async () => {
-    setLoadingData(true)
-    try {
-      const response = await api.get(`/auth/familias/${id}`)
-      const familiaData = response.data
+      // Carregar dados da família
+      console.log("👨‍👩‍👧‍👦 Carregando dados da família ID:", id)
+      const familiaRes = await api.get(`/auth/familias/${id}`)
+      const familiaData = familiaRes.data
 
-      // Converter os dados da API para o formato do formulário
+      console.log("📋 Dados da família carregados:", familiaData)
+
+      // Converter dados da API para o formato do formulário
       const dadosConvertidos: DadosFamilia = {
-        data_atendimento: familiaData.data_atendimento || new Date().toISOString().split("T")[0],
-        profissional_id: familiaData.profissional?.id || 0,
+        id: familiaData.id,
+        data_atendimento: familiaData.data_atendimento
+          ? familiaData.data_atendimento.split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        profissional_id: familiaData.profissional_id || 0,
         prontuario: familiaData.prontuario || "",
-        equipamento_id: familiaData.equipamento?.id || 0,
+        equipamento_id: familiaData.equipamento_id || 0,
         responsavel: {
           ...familiaData.responsavel,
-          renda_mensal: familiaData.responsavel.renda_mensal || 0,
+          tipo_membro: "responsavel",
+          data_nascimento: familiaData.responsavel?.data_nascimento
+            ? familiaData.responsavel.data_nascimento.split("T")[0]
+            : "",
+          sexo: familiaData.responsavel?.sexo || "feminino",
+          estado_civil: familiaData.responsavel?.estado_civil || "solteiro",
+          escolaridade: familiaData.responsavel?.escolaridade || "nao_alfabetizado",
+          nome_completo: familiaData.responsavel?.nome_completo || "",
+          cpf: familiaData.responsavel?.cpf || "",
+          rg: familiaData.responsavel?.rg || "",
+          orgao_expedidor: familiaData.responsavel?.orgao_expedidor || "",
+          naturalidade: familiaData.responsavel?.naturalidade || "",
+          telefone: familiaData.responsavel?.telefone || "",
+          telefone_recado: familiaData.responsavel?.telefone_recado || "",
+          email: familiaData.responsavel?.email || "",
+          nis: familiaData.responsavel?.nis || "",
+          titulo_eleitor: familiaData.responsavel?.titulo_eleitor || "",
+          ctps: familiaData.responsavel?.ctps || "",
+          ocupacao: familiaData.responsavel?.ocupacao || "",
+          renda_mensal: familiaData.responsavel?.renda_mensal || 0,
         },
-        endereco: familiaData.endereco || {},
-        integrantes: familiaData.integrantes || [],
-        saude: familiaData.saude || {},
+        endereco: {
+          logradouro: familiaData.endereco?.logradouro || "",
+          numero: familiaData.endereco?.numero || "",
+          complemento: familiaData.endereco?.complemento || "",
+          bairro: familiaData.endereco?.bairro || "",
+          cidade: familiaData.endereco?.cidade || "Bebedouro",
+          uf: familiaData.endereco?.uf || "SP",
+          cep: familiaData.endereco?.cep || "",
+          referencia: familiaData.endereco?.referencia || "",
+          tempo_moradia: familiaData.endereco?.tempo_moradia || "",
+        },
+        integrantes: (familiaData.integrantes || []).map((integrante: any) => ({
+          ...integrante,
+          data_nascimento: integrante.data_nascimento ? integrante.data_nascimento.split("T")[0] : "",
+          sexo: integrante.sexo || "feminino",
+          estado_civil: integrante.estado_civil || "solteiro",
+          escolaridade: integrante.escolaridade || "nao_alfabetizado",
+          nome_completo: integrante.nome_completo || "",
+          cpf: integrante.cpf || "",
+          rg: integrante.rg || "",
+          orgao_expedidor: integrante.orgao_expedidor || "",
+          naturalidade: integrante.naturalidade || "",
+          telefone: integrante.telefone || "",
+          telefone_recado: integrante.telefone_recado || "",
+          email: integrante.email || "",
+          nis: integrante.nis || "",
+          titulo_eleitor: integrante.titulo_eleitor || "",
+          ctps: integrante.ctps || "",
+          tipo_membro: integrante.tipo_membro || "filho",
+          ocupacao: integrante.ocupacao || "",
+          renda_mensal: integrante.renda_mensal || 0,
+        })),
+        saude: {
+          tem_deficiencia: !!familiaData.saude?.tem_deficiencia,
+          deficiencia_qual: familiaData.saude?.deficiencia_qual || "",
+          tem_tratamento_saude: !!familiaData.saude?.tem_tratamento_saude,
+          tratamento_qual: familiaData.saude?.tratamento_qual || "",
+          usa_medicacao_continua: !!familiaData.saude?.usa_medicacao_continua,
+          medicacao_qual: familiaData.saude?.medicacao_qual || "",
+          tem_dependente_cuidados: !!familiaData.saude?.tem_dependente_cuidados,
+          dependente_quem: familiaData.saude?.dependente_quem || "",
+          observacoes: familiaData.saude?.observacoes || "",
+        },
         habitacao: {
-          ...familiaData.habitacao,
+          qtd_comodos: familiaData.habitacao?.qtd_comodos || 0,
+          qtd_dormitorios: familiaData.habitacao?.qtd_dormitorios || 0,
           tipo_construcao: familiaData.habitacao?.tipo_construcao || [],
+          area_conflito: !!familiaData.habitacao?.area_conflito,
           condicao_domicilio: familiaData.habitacao?.condicao_domicilio || [],
+          energia_eletrica: familiaData.habitacao?.energia_eletrica || "propria",
+          agua: familiaData.habitacao?.agua || "propria",
+          esgoto: familiaData.habitacao?.esgoto || "rede",
+          coleta_lixo: familiaData.habitacao?.coleta_lixo !== undefined ? familiaData.habitacao.coleta_lixo : true,
         },
-        trabalho_renda: familiaData.trabalho_renda || {},
-        programas_sociais:
-          familiaData.programas_sociais?.map((p: any) => ({
-            programa_id: p.programa_id || p.id,
-            valor: p.valor,
-          })) || [],
-        despesas:
-          familiaData.despesas?.map((d: any) => ({
-            tipo_despesa_id: d.tipo_despesa_id || d.id,
-            valor: d.valor,
-          })) || [],
+        trabalho_renda: {
+          quem_trabalha: familiaData.trabalho_renda?.quem_trabalha || "",
+          rendimento_total: familiaData.trabalho_renda?.rendimento_total || 0,
+          observacoes: familiaData.trabalho_renda?.observacoes || "",
+        },
+        programas_sociais: (familiaData.programas_sociais || []).map((programa: any) => ({
+          programa_id: programa.programa_id,
+          valor: programa.valor,
+        })),
+        despesas: (familiaData.despesas || []).map((despesa: any) => ({
+          tipo_despesa_id: despesa.tipo_despesa_id,
+          valor: despesa.valor,
+        })),
         situacao_social: {
-          ...familiaData.situacao_social,
+          participa_religiao: !!familiaData.situacao_social?.participa_religiao,
+          religiao_qual: familiaData.situacao_social?.religiao_qual || "",
+          participa_acao_social: !!familiaData.situacao_social?.participa_acao_social,
+          acao_social_qual: familiaData.situacao_social?.acao_social_qual || "",
           servicos_publicos: familiaData.situacao_social?.servicos_publicos || [],
+          observacoes: familiaData.situacao_social?.observacoes || "",
         },
       }
 
+      console.log("✅ Dados convertidos:", dadosConvertidos)
       setDadosFamilia(dadosConvertidos)
+
+      // Marcar todas as etapas como completas já que os dados existem
+      setEtapasCompletas(new Array(ETAPAS.length).fill(true))
+
+      console.log("🎉 Carregamento concluído com sucesso!")
     } catch (error) {
-      console.error("Erro ao carregar dados da família:", error)
-      showMessage("Erro ao carregar dados da família", "error")
+      console.error("❌ Erro ao carregar dados:", error)
+      showMessage(`Erro ao carregar dados: ${error instanceof Error ? error.message : "Erro desconhecido"}`, "error")
     } finally {
       setLoadingData(false)
     }
@@ -391,7 +479,6 @@ const AlterarFamilia: React.FC = () => {
       ocupacao: "",
       renda_mensal: 0,
     }
-
     setDadosFamilia((prev) => ({
       ...prev,
       integrantes: [...prev.integrantes, novoIntegrante],
@@ -461,23 +548,13 @@ const AlterarFamilia: React.FC = () => {
     setLoading(true)
     try {
       console.log("📤 Enviando alterações:", dadosFamilia)
-
       await api.put(`/auth/familias/${id}`, dadosFamilia)
-
-      showMessage("Família atualizada com sucesso!", "success")
-
+      showMessage("Alterações salvas com sucesso!", "success")
       setTimeout(() => {
         navigate(`/familia/${id}`)
       }, 2000)
     } catch (error: unknown) {
       console.error("❌ Erro completo:", error)
-      if (typeof error === "object" && error !== null && "response" in error) {
-        // @ts-expect-error: dynamic error shape from axios
-        console.error("📋 Response data:", error.response?.data)
-        // @ts-expect-error: dynamic error shape from axios
-        console.error("📊 Status:", error.response?.status)
-      }
-
       let errorMessage = "Erro desconhecido"
       if (
         typeof error === "object" &&
@@ -491,8 +568,7 @@ const AlterarFamilia: React.FC = () => {
       } else if (error instanceof Error) {
         errorMessage = error.message
       }
-
-      showMessage(`Erro ao atualizar família: ${errorMessage}`, "error")
+      showMessage(`Erro ao salvar alterações: ${errorMessage}`, "error")
     } finally {
       setLoading(false)
     }
@@ -1184,6 +1260,7 @@ const AlterarFamilia: React.FC = () => {
                   </CardContent>
                 </Card>
               ))}
+
               {dadosFamilia.integrantes.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -1245,6 +1322,7 @@ const AlterarFamilia: React.FC = () => {
                   </label>
                 </div>
               </div>
+
               {dadosFamilia.saude.tem_deficiencia && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual deficiência?</label>
@@ -1304,6 +1382,7 @@ const AlterarFamilia: React.FC = () => {
                   </label>
                 </div>
               </div>
+
               {dadosFamilia.saude.tem_tratamento_saude && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual tratamento?</label>
@@ -1361,6 +1440,7 @@ const AlterarFamilia: React.FC = () => {
                   </label>
                 </div>
               </div>
+
               {dadosFamilia.saude.usa_medicacao_continua && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual medicação?</label>
@@ -1420,6 +1500,7 @@ const AlterarFamilia: React.FC = () => {
                   </label>
                 </div>
               </div>
+
               {dadosFamilia.saude.tem_dependente_cuidados && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quem é o dependente?</label>
@@ -1741,6 +1822,7 @@ const AlterarFamilia: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Rendimento familiar total</label>
                 <input
@@ -1759,6 +1841,7 @@ const AlterarFamilia: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Observações sobre Trabalho e Renda
@@ -1921,6 +2004,7 @@ const AlterarFamilia: React.FC = () => {
                   </label>
                 </div>
               </div>
+
               {dadosFamilia.situacao_social.participa_religiao && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual comunidade religiosa?</label>
@@ -1986,6 +2070,7 @@ const AlterarFamilia: React.FC = () => {
                   </label>
                 </div>
               </div>
+
               {dadosFamilia.situacao_social.participa_acao_social && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual ação/grupo?</label>
@@ -2031,6 +2116,7 @@ const AlterarFamilia: React.FC = () => {
                   ))}
                 </div>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Observações sobre situação social
@@ -2059,10 +2145,14 @@ const AlterarFamilia: React.FC = () => {
 
   if (loadingData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando dados da família...</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+              <p className="text-gray-600">Carregando dados da família...</p>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -2073,24 +2163,17 @@ const AlterarFamilia: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <Button variant="default" onClick={() => navigate(`/familia/${id}`)}>
+          <Button variant="default" onClick={() => navigate("/familias")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Voltar
           </Button>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 mt-4">
             Editar Dados da Família
           </h1>
-          <p className="text-gray-600 mt-2">Altere os dados da família conforme necessário</p>
+          <p className="text-gray-600 mt-2">
+            Prontuário: {dadosFamilia.prontuario} - {dadosFamilia.responsavel.nome_completo}
+          </p>
         </div>
-
-        {/* Mensagens */}
-        {message && (
-          <Alert
-            className={`mb-6 ${messageType === "success" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}
-          >
-            <div className={messageType === "success" ? "text-green-800" : "text-red-800"}>{message}</div>
-          </Alert>
-        )}
 
         {/* Indicador de Progresso */}
         <IndicadorProgresso />
@@ -2098,17 +2181,30 @@ const AlterarFamilia: React.FC = () => {
         {/* Conteúdo da Etapa Atual */}
         {renderizarEtapa()}
 
+        {/* Mensagens - Movido para antes dos botões */}
+        {message && (
+          <div className="mt-6">
+            <Alert
+              className={`mb-0 ${
+                messageType === "success" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+              }`}
+            >
+              <div className={messageType === "success" ? "text-green-800" : "text-red-800"}>{message}</div>
+            </Alert>
+          </div>
+        )}
+
         {/* Botões de Navegação */}
-        <Card className="mt-8">
+        <Card className="mt-4">
           <CardFooter className="flex justify-between items-center p-6">
             <div className="flex gap-4">
-              <Button variant="outline" onClick={() => navigate(`/familia/${id}`)}>
+              <Button variant="outline" onClick={() => navigate("/familias")}>
                 Cancelar
               </Button>
               <Button
                 variant="outline"
                 onClick={() => {
-                  localStorage.setItem("rascunho_edicao_familia", JSON.stringify(dadosFamilia))
+                  localStorage.setItem("rascunho_familia_edicao", JSON.stringify(dadosFamilia))
                   showMessage("Rascunho salvo com sucesso!", "success")
                 }}
                 className="flex items-center gap-2"
@@ -2125,7 +2221,6 @@ const AlterarFamilia: React.FC = () => {
                   Anterior
                 </Button>
               )}
-
               {etapaAtual < ETAPAS.length - 1 ? (
                 <Button onClick={proximaEtapa} className="flex items-center gap-2">
                   Próximo
@@ -2135,7 +2230,7 @@ const AlterarFamilia: React.FC = () => {
                 <Button onClick={salvarAlteracoes} disabled={loading} className="flex items-center gap-2">
                   {loading ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       Salvando...
                     </>
                   ) : (
