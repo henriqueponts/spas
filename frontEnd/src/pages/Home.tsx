@@ -1,37 +1,42 @@
-import axios from 'axios';
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+"use client"
+
+import type React from "react"
+import { useAuth } from "../contexts/AuthContext"
+import Header from "../components/Header"
+import QuickActions from "../components/QuickActions"
 
 const Home: React.FC = () => {
-const navigate = useNavigate()
-const fetchUser = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3000/auth/home', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      if (response.status !== 200) {
-      navigate('/login')
-      }
-    } catch (err) {
-      navigate('/login')
-      console.error(err)
-    }
-  }
+  const { user } = useAuth()
 
-  useEffect(() => {
-    fetchUser()
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    )
   }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  , [])
 
   return (
-    <div className='text-3x1 text-blue-500'>
-      Welcome to the Home Page
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
+      <Header />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Welcome Section */}
+        <div className="text-center mb-12">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Bem-vindo(a), {user.nome.split(" ")[0]}!</h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">Escolha uma das opções abaixo para começar</p>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="max-w-6xl mx-auto">
+          <QuickActions />
+        </div>
+
+        {/* Additional spacing for better visual balance */}
+        <div className="h-16"></div>
+      </main>
     </div>
   )
 }
 
-export default Home;
+export default Home

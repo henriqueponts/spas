@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Search, Filter, Plus, Users, MapPin, Phone, DollarSign, Calendar, FileText, Heart } from "lucide-react"
 import api from "../services/api"
+import Header from "../components/Header"
 
 interface Responsavel {
   nome_completo: string
@@ -174,8 +175,9 @@ const Familias: React.FC = () => {
     )
   }
 
-  return (
+  return (                                                                                                                                                                                                                                                                                                            
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <Header />
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header Moderno */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-gray-100">
@@ -187,7 +189,7 @@ const Familias: React.FC = () => {
               <p className="text-gray-600 text-lg">Gerencie e acompanhe as famílias do sistema</p>
             </div>
             <button
-              onClick={() => navigate("/cadastro/familia")}
+              onClick={() => navigate("/familias/cadastro")}
               className="mt-4 lg:mt-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 flex items-center gap-2 font-medium shadow-lg hover:shadow-xl"
             >
               <Plus className="w-5 h-5" />

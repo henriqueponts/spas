@@ -6,22 +6,68 @@ import jwt from 'jsonwebtoken';
 const router = express.Router()
 
 router.post('/registro', async (req, res) => {
-    const { nome, cpf, cargo, senha, equipamento } = req.body;
-    try{
-        const db = await connectToDatabase()
-        const [rows] = await db.query('SELECT * FROM usuarios WHERE cpf = ?', [cpf])
-        if (rows.length > 0) {
-            return res.status(400).json({ message: 'Esse CPF já está em uso!' })
-        }
-
-        const hashPassword = await bcrypt.hash(senha, 10)
-        await db.query('INSERT INTO usuarios (nome, cpf, senha_hash, cargo_id, equipamento_id) VALUES (?, ?, ?, ?, ?)', [nome, cpf, hashPassword, cargo, equipamento])
+    console.log('📝 Rota de registro chamada');
+    console.log('📦 Dados recebidos:', req.body);
+    
+    const { nome, cpf, email, cargo, equipamento, senha } = req.body;
+    
+    try {
+        const db = await connectToDatabase();
         
-        res.status(201).json({ message: 'Usuário registrado com sucesso!' })
-    } catch(err) {
-        res.status(500).json(err)
+        // Se há token (usuário logado), verificar se é DIRETOR
+        const authHeader = req.headers['authorization'];
+        if (authHeader) {
+            try {
+                const token = authHeader.split(' ')[1];
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                
+                // Verificar se é DIRETOR
+                const [userResult] = await db.query(`
+                    SELECT c.nome as cargo_nome 
+                    FROM usuarios u 
+                    JOIN cargos c ON u.cargo_id = c.id 
+                    WHERE u.id = ?
+                `, [decoded.id]);
+                
+                if (userResult.length === 0 || userResult[0].cargo_nome !== 'DIRETOR') {
+                    return res.status(403).json({ message: 'Apenas diretores podem criar usuários' });
+                }
+            } catch (tokenError) {
+                return res.status(401).json({ message: 'Token inválido' });
+            }
+        }
+        
+        // Verificar se CPF já existe
+        const [rows] = await db.query('SELECT * FROM usuarios WHERE cpf = ?', [cpf]);
+        if (rows.length > 0) {
+            return res.status(400).json({ message: 'Esse CPF já está em uso!' });
+        }
+        
+        // Verificar se email já existe (se fornecido)
+        if (email) {
+            const [emailRows] = await db.query('SELECT * FROM usuarios WHERE email = ?', [email]);
+            if (emailRows.length > 0) {
+                return res.status(400).json({ message: 'Esse email já está em uso!' });
+            }
+        }
+        
+        // Hash da senha
+        const hashPassword = await bcrypt.hash(senha, 10);
+        
+        // Inserir usuário
+        await db.query(`
+            INSERT INTO usuarios (nome, cpf, email, senha_hash, cargo_id, equipamento_id) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        `, [nome, cpf, email || null, hashPassword, cargo, equipamento]);
+        
+        console.log('✅ Usuário criado com sucesso!');
+        res.status(201).json({ message: 'Usuário registrado com sucesso!' });
+        
+    } catch (err) {
+        console.error('❌ Erro ao criar usuário:', err);
+        res.status(500).json({ message: 'Erro interno do servidor' });
     }
-})
+});
 
 router.post('/login', async (req, res) => {
     const { cpf, senha } = req.body;
@@ -46,6 +92,8 @@ router.post('/login', async (req, res) => {
         if (!isMatch) {
             return res.status(401).json({ message: 'Senha incorreta!' });
         }
+
+        await db.query('UPDATE usuarios SET ultimo_login = NOW() WHERE id = ?', [rows[0].id]);
 
         const token = jwt.sign(
             { id: rows[0].id }, 
@@ -110,18 +158,26 @@ const verifyToken = async (req, res, next) => {
 
 router.get('/home', verifyToken, async (req, res) => {
     try {
-        const db = await connectToDatabase()
-        const [rows] = await db.query('SELECT * FROM usuarios WHERE id = ?', [req.userId])
+        const db = await connectToDatabase();
+        const [rows] = await db.query(`
+            SELECT 
+                u.id, u.nome, u.cargo_id, c.nome as cargo_nome,
+                u.equipamento_id, e.nome as equipamento_nome
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
+            JOIN equipamento e ON u.equipamento_id = e.id
+            WHERE u.id = ? AND u.ativo = true
+        `, [req.userId]);
+        
         if (rows.length === 0) {
-            return res.status(404).json({ message: 'Usuário não existe!' })
+            return res.status(404).json({ message: 'Usuário não encontrado ou inativo!' });
         }
-
-        return res.status(200).json({ nome: rows[0].nome, cargo: rows[0].cargo_id, equipamento: rows[0].equipamento_id })
+        return res.status(200).json(rows[0]);
     } catch (err) {
-        return res.status(500).json({ message: 'server error' })
+        console.error('Erro na rota /home:', err);
+        return res.status(500).json({ message: 'Erro no servidor ao validar sessão' });
     }
-}
-)
+});
 
 // ============================================
 // 1. PRIMEIRO - ADICIONE ESTAS ROTAS SIMPLES PARA TESTAR
@@ -1315,5 +1371,123 @@ router.post('/familias/:id/evolucoes', verifyToken, async (req, res) => {
         });
     }
 });
+
+router.get('/usuarios', verifyToken, async (req, res) => {
+    // ADICIONE ESTES LOGS
+    console.log('===========================================');
+    console.log('🕵️  ROTA GET /usuarios ACESSADA');
+    console.log('🔑 ID do usuário (do token):', req.userId);
+    // FIM DOS LOGS
+
+    try {
+        const db = await connectToDatabase();
+        
+        // Verificar se o usuário logado é DIRETOR
+        const [userResult] = await db.query(`
+            SELECT c.nome as cargo_nome 
+            FROM usuarios u 
+            JOIN cargos c ON u.cargo_id = c.id 
+            WHERE u.id = ?
+        `, [req.userId]);
+        
+        // ADICIONE ESTE LOG
+        console.log('📦 Resultado da query de permissão:', userResult);
+
+        if (userResult.length === 0 || userResult[0].cargo_nome !== 'DIRETOR') {
+            // ADICIONE ESTE LOG
+            console.log('🚫 ACESSO NEGADO! O usuário não é DIRETOR.');
+            console.log('===========================================');
+            return res.status(403).json({ message: 'Acesso negado. Permissão de Diretor necessária.' });
+        }
+        
+        // ADICIONE ESTE LOG
+        console.log('✅ Acesso PERMITIDO! Buscando lista de usuários...');
+        
+        // Buscar todos os usuários com informações completas
+        const [usuarios] = await db.query(`
+            SELECT 
+                u.id,
+                u.nome,
+                u.cpf,
+                u.email,
+                u.cargo_id,
+                c.nome as cargo_nome,
+                u.equipamento_id,
+                e.nome as equipamento_nome,
+                u.ativo,
+                u.created_at,
+                u.ultimo_login
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
+            JOIN equipamento e ON u.equipamento_id = e.id
+            ORDER BY u.nome ASC
+        `);
+        
+        console.log(`✅ ${usuarios.length} usuários encontrados e enviados.`);
+        console.log('===========================================');
+        res.json(usuarios);
+        
+    } catch (error) {
+        console.error('❌ Erro GERAL na rota /usuarios:', error);
+        console.log('===========================================');
+        res.status(500).json({ message: 'Erro interno ao buscar usuários' });
+    }
+});
+// Alterar status do usuário (ativar/inativar)
+router.put('/usuarios/:id/status', verifyToken, async (req, res) => {
+    console.log('🔄 Alterando status do usuário:', req.params.id);
+    
+    try {
+        const db = await connectToDatabase();
+        const usuario_id = parseInt(req.params.id);
+        
+        if (isNaN(usuario_id)) {
+            return res.status(400).json({ message: 'ID do usuário inválido' });
+        }
+        
+        // Verificar se o usuário logado é DIRETOR
+        const [userResult] = await db.query(`
+            SELECT c.nome as cargo_nome 
+            FROM usuarios u 
+            JOIN cargos c ON u.cargo_id = c.id 
+            WHERE u.id = ?
+        `, [req.userId]);
+        
+        if (userResult.length === 0 || userResult[0].cargo_nome !== 'DIRETOR') {
+            return res.status(403).json({ message: 'Acesso negado' });
+        }
+        
+        // Verificar se o usuário existe
+        const [usuarioExiste] = await db.query(
+            'SELECT id, ativo FROM usuarios WHERE id = ?', 
+            [usuario_id]
+        );
+        
+        if (usuarioExiste.length === 0) {
+            return res.status(404).json({ message: 'Usuário não encontrado' });
+        }
+        
+        // Alternar status
+        const novoStatus = !usuarioExiste[0].ativo;
+        
+        await db.query(
+            'UPDATE usuarios SET ativo = ? WHERE id = ?', 
+            [novoStatus, usuario_id]
+        );
+        
+        console.log(`✅ Status do usuário ${usuario_id} alterado para: ${novoStatus ? 'ativo' : 'inativo'}`);
+        
+        res.json({
+            message: `Usuário ${novoStatus ? 'ativado' : 'inativado'} com sucesso`,
+            ativo: novoStatus
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao alterar status do usuário:', error);
+        res.status(500).json({ message: 'Erro ao alterar status do usuário' });
+    }
+});
+
+
 
 export default router

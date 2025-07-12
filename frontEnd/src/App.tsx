@@ -6,7 +6,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { PublicRoute } from './components/PublicRoute';
 // Tipos para Cargos
-import { Cargo, CargoNames, CargoRoutes } from './types';
+import { Cargo, CargoRoutes } from './types'; // Mantenha Cargo e CargoRoutes
 // Páginas Públicas
 import Login from './pages/Login';
 import AcessoNegado from './pages/AcessoNegado';
@@ -16,21 +16,18 @@ import Home from './pages/Home';
 import Beneficios from './pages/Beneficios'; 
 import CadastroFamilia from './pages/CadastroFamilia';
 import VisualizarFamilia from './pages/VisualizarFamilia';
-import DashboardDiretor from './pages/dashboards/DashboardDiretor';
-import DashboardCoordenador from './pages/dashboards/DashboardCoordenador';
-import DashboardTecnico from './pages/dashboards/DashboardTecnico';
-import DashboardAssistente from './pages/dashboards/DashboardAssistente';
 import Familias from './pages/Familias';
 import AlterarFamilia from './pages/AlterarFamilia';
+import Usuarios from './pages/Usuarios';
 
-// Hook para proteger navegação baseado no cargo
+// Hook para proteger navegação baseado no cargo (MANTIDO)
+
 const useCargoRedirect = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    // Se não há usuário ou está na página de login, não faz nada
     if (!user || location.pathname === '/login') {
       return;
     }
@@ -39,28 +36,37 @@ const useCargoRedirect = () => {
     
     // Lista de rotas que todos podem acessar
     const publicRoutes = ['/acesso-negado', '/login'];
-    const sharedRoutes = ['/beneficios', '/home', '/', '/familias', '/cadastro/familia'];
     
-    // Verifica se está em uma rota de família específica
+    // Lista de rotas compartilhadas ou com permissão específica
+    const sharedRoutes = [
+        '/', 
+        '/home', 
+        '/beneficios', 
+        '/familias', 
+        '/familias/cadastro',
+        '/usuarios',   // <-- ADICIONE ESTA LINHA
+        '/registro'    // <-- ADICIONE ESTA LINHA
+    ];
+    
+    // Verifica se está em uma rota de família específica (ex: /familia/123)
     const isFamiliaRoute = location.pathname.startsWith('/familia/');
     
-    // Se não está em uma rota permitida
+    // Se não está em uma rota permitida...
     if (!publicRoutes.includes(location.pathname) && 
         !sharedRoutes.includes(location.pathname) &&
         !isFamiliaRoute &&
         location.pathname !== allowedRoute) {
-      
-      // Verifica se é uma rota de dashboard que não pertence ao usuário
-      const isDashboardRoute = location.pathname.startsWith('/dashboard-');
-      
-      if (isDashboardRoute && location.pathname !== allowedRoute) {
+           
+      // A lógica de redirecionamento aqui permanece a mesma
+      if (location.pathname !== allowedRoute) {
+        console.log(`[useCargoRedirect] Redirecionando de ${location.pathname} para /acesso-negado`);
         navigate('/acesso-negado', { replace: true });
       }
     }
   }, [user, location.pathname, navigate]);
 };
 
-// Componente para redirecionar da rota raiz
+// Componente para redirecionar da rota raiz (MANTIDO)
 const RootRedirect: React.FC = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -82,164 +88,120 @@ const RootRedirect: React.FC = () => {
       </div>
     );
   }
-
   return null;
 };
 
-// Componente wrapper para aplicar o hook de redirecionamento
+// Componente wrapper para aplicar o hook de redirecionamento (MANTIDO)
 const AppContent: React.FC = () => {
   useCargoRedirect();
 
   return (
     <Routes>
       {/* --- ROTAS PÚBLICAS --- */}
-      {/* Login com proteção para usuários já autenticados */}
       <Route 
         path="/login" 
-        element={
-          <PublicRoute>
-            <Login />
-          </PublicRoute>
-        } 
+        element={<PublicRoute><Login /></PublicRoute>} 
       />
-      
-      {/* Acesso negado é uma rota especial que todos podem ver */}
       <Route path="/acesso-negado" element={<AcessoNegado />} />
       
-      {/* --- ROTAS PROTEGIDAS --- */}
-      {/* Registro - apenas Diretores */}
+      {/* --- ROTAS PROTEGIDAS (AGORA USANDO IDs) --- */}
+      {/* Registro - apenas Diretores (ID 1) */}
       <Route 
         path="/registro" 
         element={
-          <ProtectedRoute allowedRoles={[CargoNames[Cargo.DIRETOR]]}>
+          <ProtectedRoute allowedRoles={[Cargo.DIRETOR]}>
             <Registro />
           </ProtectedRoute>
         } 
       />
 
-      {/* Rotas de Família */}
+      {/* Usuários - apenas Diretores (ID 1) */}
+      <Route 
+        path="/usuarios" 
+        element={
+          <ProtectedRoute allowedRoles={[Cargo.DIRETOR]}>
+            <Usuarios />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Rotas de Família (IDs 1, 2, 3, 4) */}
       <Route 
         path="/familias" 
         element={
           <ProtectedRoute allowedRoles={[
-            CargoNames[Cargo.DIRETOR],
-            CargoNames[Cargo.COORDENADOR],
-            CargoNames[Cargo.TECNICO],
-            CargoNames[Cargo.ASSISTENTE]
+            Cargo.DIRETOR,
+            Cargo.COORDENADOR,
+            Cargo.TECNICO,
+            Cargo.ASSISTENTE
           ]}>
             <Familias />
           </ProtectedRoute>
         } 
       />
-
       <Route 
         path="/familia/:id" 
         element={
           <ProtectedRoute allowedRoles={[
-            CargoNames[Cargo.DIRETOR],
-            CargoNames[Cargo.COORDENADOR],
-            CargoNames[Cargo.TECNICO],
-            CargoNames[Cargo.ASSISTENTE]
+            Cargo.DIRETOR,
+            Cargo.COORDENADOR,
+            Cargo.TECNICO,
+            Cargo.ASSISTENTE
           ]}>
             <VisualizarFamilia />
           </ProtectedRoute>
         } 
       />
-
-            <Route 
+      <Route 
         path="/familia/:id/editar" 
         element={
           <ProtectedRoute allowedRoles={[
-            CargoNames[Cargo.DIRETOR],
-            CargoNames[Cargo.COORDENADOR],
-            CargoNames[Cargo.TECNICO],
-            CargoNames[Cargo.ASSISTENTE]
+            Cargo.DIRETOR,
+            Cargo.COORDENADOR,
+            Cargo.TECNICO,
+            Cargo.ASSISTENTE
           ]}>
             <AlterarFamilia />
           </ProtectedRoute>
         } 
       />
-
       <Route 
-        path="/cadastro/familia" 
+        path="/familias/cadastro" 
         element={
           <ProtectedRoute allowedRoles={[
-            CargoNames[Cargo.DIRETOR],
-            CargoNames[Cargo.COORDENADOR],
-            CargoNames[Cargo.TECNICO],
-            CargoNames[Cargo.ASSISTENTE]
+            Cargo.DIRETOR,
+            Cargo.COORDENADOR,
+            Cargo.TECNICO,
+            Cargo.ASSISTENTE
           ]}>
             <CadastroFamilia />
           </ProtectedRoute>
         } 
       />
       
-      {/* Home - todos os cargos internos (exceto EXTERNO) */}
+      {/* Home - todos os cargos internos (IDs 1, 2, 3, 4) */}
       <Route 
         path="/home" 
         element={
           <ProtectedRoute allowedRoles={[
-            CargoNames[Cargo.ASSISTENTE],
-            CargoNames[Cargo.COORDENADOR],
-            CargoNames[Cargo.DIRETOR],
-            CargoNames[Cargo.TECNICO]
+            Cargo.DIRETOR,
+            Cargo.COORDENADOR,
+            Cargo.TECNICO,
+            Cargo.ASSISTENTE
           ]}>
             <Home />
           </ProtectedRoute>
         } 
       />
       
-      {/* Benefícios - acessível por qualquer usuário logado */}
+      {/* Benefícios - acessível por qualquer usuário logado (sem allowedRoles) */}
       <Route 
         path="/beneficios" 
-        element={
-          <ProtectedRoute>
-            <Beneficios />
-          </ProtectedRoute>
-        } 
+        element={<ProtectedRoute><Beneficios /></ProtectedRoute>} 
       />
       
-      {/* --- DASHBOARDS ESPECÍFICOS --- */}
-      <Route 
-        path="/dashboard-diretor" 
-        element={
-          <ProtectedRoute allowedRoles={[CargoNames[Cargo.DIRETOR]]}>
-            <DashboardDiretor />
-          </ProtectedRoute>
-        } 
-      />
-      
-      <Route 
-        path="/dashboard-coordenador" 
-        element={
-          <ProtectedRoute allowedRoles={[CargoNames[Cargo.COORDENADOR]]}>
-            <DashboardCoordenador />
-          </ProtectedRoute>
-        } 
-      />
-      
-      <Route 
-        path="/dashboard-tecnico" 
-        element={
-          <ProtectedRoute allowedRoles={[CargoNames[Cargo.TECNICO]]}>
-            <DashboardTecnico />
-          </ProtectedRoute>
-        } 
-      />
-      
-      <Route 
-        path="/dashboard-assistente" 
-        element={
-          <ProtectedRoute allowedRoles={[CargoNames[Cargo.ASSISTENTE]]}>
-            <DashboardAssistente />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Rota raiz - redireciona baseado no cargo */}
+      {/* Rota raiz e fallback (MANTIDAS) */}
       <Route path="/" element={<RootRedirect />} />
-      
-      {/* Rota de fallback: página 404 protegida */}
       <Route 
         path="*" 
         element={
@@ -265,7 +227,6 @@ const AppContent: React.FC = () => {
 
 function App() {
   return (
-    // O AuthProvider envolve toda a aplicação para fornecer o contexto de autenticação
     <AuthProvider>
       <BrowserRouter>
         <AppContent />

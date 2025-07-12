@@ -33,6 +33,7 @@ import {
   Building,
   Landmark,
 } from "lucide-react"
+import Header from "../components/Header"
 
 // --- INTERFACES DE DADOS (Mantidas) ---
 interface Integrante {
@@ -299,6 +300,7 @@ const VisualizarFamilia: React.FC = () => {
   // --- RENDERIZAÇÃO DO COMPONENTE ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <Header/>
       <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="mb-6">
         <Button variant="default" onClick={() => navigate("/familias")}>

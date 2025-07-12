@@ -322,6 +322,7 @@ const AlterarFamilia: React.FC = () => {
           referencia: familiaData.endereco?.referencia || "",
           tempo_moradia: familiaData.endereco?.tempo_moradia || "",
         },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         integrantes: (familiaData.integrantes || []).map((integrante: any) => ({
           ...integrante,
           data_nascimento: integrante.data_nascimento ? integrante.data_nascimento.split("T")[0] : "",
@@ -370,11 +371,11 @@ const AlterarFamilia: React.FC = () => {
           rendimento_total: familiaData.trabalho_renda?.rendimento_total || 0,
           observacoes: familiaData.trabalho_renda?.observacoes || "",
         },
-        programas_sociais: (familiaData.programas_sociais || []).map((programa: any) => ({
+        programas_sociais: (familiaData.programas_sociais || []).map((programa: { programa_id: number; valor: number }) => ({
           programa_id: programa.programa_id,
           valor: programa.valor,
         })),
-        despesas: (familiaData.despesas || []).map((despesa: any) => ({
+        despesas: (familiaData.despesas || []).map((despesa: { tipo_despesa_id: number; valor: number }) => ({
           tipo_despesa_id: despesa.tipo_despesa_id,
           valor: despesa.valor,
         })),

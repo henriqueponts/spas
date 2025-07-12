@@ -21,6 +21,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../compone
 import { Alert } from "../components/ui/Alert"
 import { Separator } from "../components/ui/Separator"
 import api from "../services/api"
+import Header from "../components/Header"
 
 // Tipos baseados na estrutura do banco
 interface Equipamento {
@@ -2015,10 +2016,12 @@ const CadastroFamilia: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 py-8">
+    
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 ">
+      <Header />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 mt-8">
           <Button variant="default" onClick={() => window.history.back()}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Voltar

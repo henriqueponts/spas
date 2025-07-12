@@ -19,11 +19,13 @@ export interface LoginResponse {
 }
 
 export const Cargo = {
-  EXTERNO: 5,
-  ASSISTENTE: 4,
-  TECNICO: 3,
+  
+  DIRETOR: 1,
   COORDENADOR: 2,
-  DIRETOR: 1
+  TECNICO: 3,
+  ASSISTENTE: 4,
+  EXTERNO: 5
+
 } as const;
 
 export const CargoNames = {
@@ -36,8 +38,8 @@ export const CargoNames = {
 
 export const CargoRoutes = {
   [Cargo.EXTERNO]: '/beneficios',
-  [Cargo.ASSISTENTE]: '/dashboard-assistente',
-  [Cargo.TECNICO]: '/dashboard-tecnico',
-  [Cargo.COORDENADOR]: '/dashboard-coordenador',
-  [Cargo.DIRETOR]: '/dashboard-diretor'
+  [Cargo.ASSISTENTE]: '/home',
+  [Cargo.TECNICO]: '/home',
+  [Cargo.COORDENADOR]: '/home',
+  [Cargo.DIRETOR]: '/home'
 } as const;
