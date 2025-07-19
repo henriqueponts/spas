@@ -534,7 +534,116 @@ router.get('/verificar-tabelas', async (req, res) => {
         res.status(500).json({ message: 'Erro ao verificar tabelas' });
     }
 });
+// teste Beneficios
 
+// Rota de busca Familia (específica)
+router.get('/familias/buscar', async (req, res) => {
+    console.log('🔍 Rota /familias/buscar chamada');
+    console.log('📋 Query params:', req.query);
+
+    const { tipo, termo } = req.query;
+
+    if (!tipo || !termo) {
+        console.log('❌ Parâmetros inválidos');
+        return res.status(400).json({ message: 'Tipo e termo são obrigatórios' });
+    }
+
+    try {
+        const db = await connectToDatabase();
+        console.log('✅ Conexão estabelecida para busca');
+
+        let query = '';
+        let params = [];
+
+        switch (tipo) {
+            case 'nome':
+                query = `
+                    SELECT 
+                        f.id,
+                        f.prontuario,
+                        p.nome_completo as responsavel_nome,
+                        p.cpf as responsavel_cpf,
+                        'CRAS Centro' as equipamento_nome
+                    FROM familias f
+                    INNER JOIN pessoas p ON f.id = p.familia_id 
+                    WHERE p.tipo_membro = 'responsavel' 
+                    AND p.nome_completo LIKE ?
+                    LIMIT 10
+                `;
+                params = [`%${termo}%`];    
+                break;
+
+            case 'cpf':
+                const cpfLimpo = termo.replace(/\D/g, '');
+                query = `
+                    SELECT 
+                        f.id,
+                        f.prontuario,
+                        p.nome_completo as responsavel_nome,
+                        p.cpf as responsavel_cpf,
+                        'CRAS Centro' as equipamento_nome
+                    FROM familias f
+                    INNER JOIN pessoas p ON f.id = p.familia_id 
+                    WHERE p.tipo_membro = 'responsavel' 
+                    AND p.cpf = ?
+                    LIMIT 10
+                `;
+                params = [cpfLimpo];
+                break;
+
+            case 'prontuario':
+                query = `
+                    SELECT 
+                        f.id,
+                        f.prontuario,
+                        p.nome_completo as responsavel_nome,
+                        p.cpf as responsavel_cpf,
+                        'CRAS Centro' as equipamento_nome
+                    FROM familias f
+                    INNER JOIN pessoas p ON f.id = p.familia_id 
+                    WHERE p.tipo_membro = 'responsavel' 
+                    AND f.prontuario = ?
+                    LIMIT 10
+                `;
+                params = [termo];
+                break;
+
+            default:
+                query = `
+                    SELECT 
+                        f.id,
+                        f.prontuario,
+                        p.nome_completo as responsavel_nome,
+                        p.cpf as responsavel_cpf,
+                        'CRAS Centro' as equipamento_nome
+                    FROM familias f
+                    INNER JOIN pessoas p ON f.id = p.familia_id 
+                    WHERE p.tipo_membro = 'responsavel'
+                    LIMIT 10
+                `;
+                params = [];
+        }
+
+        console.log('🔍 Executando query de busca...');
+        console.log('📋 Buscando por:', tipo, '=', termo);
+
+        const [results] = await db.query(query, params);
+
+        console.log('✅ Busca concluída, resultados:', results.length);
+
+        res.json(results);
+
+    } catch (error) {
+        console.error('❌ Erro na busca:', error);
+        res.status(500).json({
+            message: 'Erro ao buscar famílias',
+            error: error.message
+        });
+    }
+});
+
+
+// final teste Beneficios
 // ============================================
 // ENDPOINT COM DEBUG MELHORADO - ADICIONE NO authRoutes.js
 // ============================================
@@ -799,5 +908,243 @@ router.get('/familias/:id', verifyToken, async (req, res) => {
         });
     }
 });
+
+// ============================================
+// ROTA PARA CADASTRAR BENEFÍCIOS
+// ============================================
+
+router.post('/beneficios', verifyToken, async (req, res) => {
+    console.log('🎯 ROTA POST /beneficios chamada');
+    console.log('👤 Usuário logado ID:', req.userId);
+    console.log('📦 Dados recebidos:', JSON.stringify(req.body, null, 2));
+
+    try {
+        const db = await connectToDatabase();
+        
+        const {
+            familia_id,
+            tipo_beneficio,
+            descricao_beneficio,
+            data_concessao,
+            valor,
+            justificativa,
+            observacoes
+        } = req.body;
+
+        // Validações básicas
+        if (!familia_id) {
+            return res.status(400).json({ message: 'ID da família é obrigatório' });
+        }
+        if (!tipo_beneficio) {
+            return res.status(400).json({ message: 'Tipo de benefício é obrigatório' });
+        }
+        
+        // Validar se o tipo de benefício é válido
+        const tiposValidos = ['cesta_basica', 'auxilio_funeral', 'auxilio_natalidade', 'passagem', 'outro'];
+        if (!tiposValidos.includes(tipo_beneficio)) {
+            return res.status(400).json({ message: 'Tipo de benefício inválido' });
+        }
+        
+        if (!data_concessao) {
+            return res.status(400).json({ message: 'Data de concessão é obrigatória' });
+        }
+        if (!valor || valor <= 0) {
+            return res.status(400).json({ message: 'Valor deve ser maior que zero' });
+        }
+        if (!justificativa) {
+            return res.status(400).json({ message: 'Justificativa é obrigatória' });
+        }
+
+        console.log('✅ Validações passaram');
+
+        // Verificar se a família existe
+        console.log('🔍 Verificando se família existe...');
+        const [familiaExists] = await db.query(
+            'SELECT id FROM familias WHERE id = ?',
+            [familia_id]
+        );
+
+        if (familiaExists.length === 0) {
+            console.log('❌ Família não encontrada:', familia_id);
+            return res.status(404).json({ message: 'Família não encontrada' });
+        }
+
+        console.log('✅ Família encontrada');
+
+        // Verificar se o usuário existe
+        console.log('🔍 Verificando se usuário existe...');
+        const [usuarioExists] = await db.query(
+            'SELECT id FROM usuarios WHERE id = ?',
+            [req.userId]
+        );
+
+        if (usuarioExists.length === 0) {
+            console.log('❌ Usuário não encontrado:', req.userId);
+            return res.status(404).json({ message: 'Usuário não encontrado' });
+        }
+
+        console.log('✅ Usuário encontrado');
+
+        // Inserir benefício
+        console.log('💰 Inserindo benefício...');
+        const [result] = await db.query(`
+            INSERT INTO beneficios (
+                familia_id,
+                tipo_beneficio,
+                descricao_beneficio,
+                data_concessao,
+                valor,
+                justificativa,
+                responsavel_id,
+                status,
+                observacoes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'concedido', ?)
+        `, [
+            familia_id,
+            tipo_beneficio,
+            descricao_beneficio || '',
+            data_concessao,
+            valor,
+            justificativa,
+            req.userId, // responsavel_id
+            observacoes || ''
+        ]);
+
+        const beneficio_id = result.insertId;
+        console.log('✅ Benefício inserido com ID:', beneficio_id);
+
+        // Buscar dados do benefício inserido para retornar
+        console.log('📋 Buscando dados do benefício inserido...');
+        const [beneficioInserido] = await db.query(`
+            SELECT 
+                b.*,
+                p.nome_completo as responsavel_nome,
+                f.prontuario
+            FROM beneficios b
+            LEFT JOIN familias f ON b.familia_id = f.id
+            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+            WHERE b.id = ?
+        `, [beneficio_id]);
+
+        res.status(201).json({
+            message: 'Benefício cadastrado com sucesso!',
+            beneficio: beneficioInserido[0]
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao cadastrar benefício:', error);
+        console.error('💥 Stack trace:', error.stack);
+        
+        if (error.code === 'ER_BAD_FIELD_ERROR') {
+            return res.status(400).json({ 
+                message: 'Erro na estrutura dos dados enviados',
+                error: error.message 
+            });
+        }
+        
+        if (error.code === 'ER_NO_REFERENCED_ROW_2') {
+            return res.status(400).json({ 
+                message: 'Referência inválida (família ou usuário não existe)',
+                error: error.message 
+            });
+        }
+        
+        res.status(500).json({
+            message: 'Erro interno do servidor',
+            error: error.message
+        });
+    }
+});
+
+
+// Buscar histórico de benefícios (SEM verifyToken) - VERSÃO SIMPLIFICADA
+router.get('/beneficios/historico', async (req, res) => {
+    console.log('📋 Rota GET /beneficios/historico chamada');
+    
+    try {
+        const db = await connectToDatabase();
+        
+        console.log('🔍 Buscando histórico de benefícios...');
+        
+        // Primeiro, vamos tentar uma query mais simples
+        const [results] = await db.query(`
+            SELECT 
+                b.id,
+                b.familia_id,
+                b.tipo_beneficio,
+                b.descricao_beneficio,
+                b.data_concessao,
+                b.valor,
+                b.justificativa,
+                b.status,
+                b.data_entrega,
+                b.observacoes,
+                b.created_at,
+                'Nome não encontrado' as responsavel_nome,
+                'Prontuário não encontrado' as prontuario
+            FROM beneficios b
+            ORDER BY b.created_at DESC
+            LIMIT 50
+        `);
+
+        console.log('✅ Histórico encontrado:', results.length, 'benefícios');
+
+        res.json(results);
+    } catch (error) {
+        console.error('❌ Erro ao buscar histórico:', error);
+        console.error('💥 Stack trace:', error.stack);
+        res.status(500).json({ 
+            message: 'Erro ao buscar histórico',
+            error: error.message 
+        });
+    }
+});
+
+// Atualizar rota de histórico completo
+router.get('/beneficios/historico-completo', async (req, res) => {
+    console.log('📋 Rota GET /beneficios/historico-completo chamada');
+
+    try {
+        const db = await connectToDatabase();
+
+        console.log('🔍 Buscando histórico completo...');
+
+        const [results] = await db.query(`
+            SELECT
+                b.id,
+                b.familia_id,
+                b.tipo_beneficio,
+                b.descricao_beneficio,
+                b.data_concessao,
+                b.valor,
+                b.justificativa,
+                b.status,
+                b.data_entrega,
+                b.observacoes,
+                b.created_at,
+                COALESCE(p.nome_completo, 'Nome não encontrado') as responsavel_nome,
+                COALESCE(f.prontuario, 'Prontuário não encontrado') as prontuario,
+                COALESCE(u.nome, 'Usuário não encontrado') as responsavel_concessao
+            FROM beneficios b
+            LEFT JOIN familias f ON b.familia_id = f.id
+            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+            LEFT JOIN usuarios u ON b.responsavel_id = u.id
+            ORDER BY b.created_at DESC
+            LIMIT 50
+        `);
+
+        console.log('✅ Histórico completo encontrado:', results.length, 'benefícios');
+
+        res.json(results);
+    } catch (error) {
+        console.error('❌ Erro ao buscar histórico completo:', error);
+        res.status(500).json({
+            message: 'Erro ao buscar histórico completo',
+            error: error.message
+        });
+    }
+});
+
+
 
 export default router
