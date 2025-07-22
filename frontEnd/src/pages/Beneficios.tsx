@@ -175,7 +175,7 @@ const BeneficiosPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await api.post('/auth/beneficios', dadosBeneficio);
+      /*const response = */ await api.post('/auth/beneficios', dadosBeneficio);
       
       showMessage('Benefício registrado com sucesso!', 'success');
       
