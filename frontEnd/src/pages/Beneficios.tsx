@@ -170,13 +170,18 @@ const BeneficiosPage: React.FC = () => {
     return true;
   };
 
-  const salvarBeneficio = async () => {
+const salvarBeneficio = async (force: boolean = false) => {
+    // 1. Adicionamos um parâmetro 'force', que começa como false.
     if (!validarFormulario()) return;
 
     setLoading(true);
     try {
-      /*const response = */ await api.post('/auth/beneficios', dadosBeneficio);
+      // 2. Adicionamos a flag 'force' aos dados que serão enviados para a API.
+      const dadosParaEnviar = { ...dadosBeneficio, force };
+
+      await api.post('/auth/beneficios', dadosParaEnviar);
       
+      // Se der certo, a lógica de sucesso é executada normalmente.
       showMessage('Benefício registrado com sucesso!', 'success');
       
       // Limpar formulário
@@ -194,22 +199,42 @@ const BeneficiosPage: React.FC = () => {
       setFamilies([]);
       setSearchTerm('');
       
-      // Atualizar histórico
       await fetchHistorico();
-      
-      // Mudar para aba do histórico
       setActiveTab('historico');
+      
     } catch (error: any) {
-      console.error('Erro ao salvar benefício:', error);
-      let errorMessage = 'Erro desconhecido';
-      if (error?.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
+      // 3. A MÁGICA ACONTECE AQUI, NO TRATAMENTO DE ERRO
+      // Verificamos se o erro é o nosso alerta de confirmação (código 409)
+      if (error.response?.status === 409 && error.response?.data?.requiresConfirmation) {
+        
+        // Exibimos o popup de confirmação para o usuário
+        const continuar = window.confirm(
+          'ATENÇÃO: Esta família já recebeu um benefício este mês. Deseja registrar a entrega mesmo assim?'
+        );
+
+        // Se o usuário clicar "OK", chamamos a função novamente, mas com `force = true`
+        if (continuar) {
+          salvarBeneficio(true);
+          // Importante: Não desativamos o loading aqui, pois uma nova requisição foi iniciada
+          return; // Sai da execução do catch
+        }
+
+      } else {
+        // Se for qualquer outro tipo de erro, a sua lógica original de erro é executada
+        console.error('Erro ao salvar benefício:', error);
+        let errorMessage = 'Erro desconhecido';
+        if (error?.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+        showMessage(`Erro ao registrar benefício: ${errorMessage}`, 'error');
       }
-      showMessage(`Erro ao registrar benefício: ${errorMessage}`, 'error');
     } finally {
-      setLoading(false);
+      // Desativa o loading apenas se a operação tiver realmente terminado
+      if (!force) {
+          setLoading(false);
+      }
     }
   };
 
@@ -617,7 +642,7 @@ const BeneficiosPage: React.FC = () => {
                     
                     <div className="flex justify-end">
                       <button
-                        onClick={salvarBeneficio}
+                        onClick={() => salvarBeneficio()} 
                         disabled={loading || !selectedFamily}
                         className={`flex items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
                           loading || !selectedFamily

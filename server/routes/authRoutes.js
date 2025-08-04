@@ -537,7 +537,6 @@
     // teste Beneficios
 
     // Rota de busca Familia (específica)
-    // Rota para BUSCAR FAMÍLIAS (usada na página de benefícios)
 router.get('/familias/buscar', async (req, res) => {
     const { tipo, termo } = req.query;
 
@@ -568,9 +567,11 @@ router.get('/familias/buscar', async (req, res) => {
                 query = `${baseQuery} WHERE p.nome_completo LIKE ? LIMIT 10`;
                 params = [`%${termo}%`];
                 break;
-            case 'cpf':
+              case 'cpf':
                 const cpfLimpo = String(termo).replace(/\D/g, '');
-                query = `${baseQuery} WHERE p.cpf = ? LIMIT 10`;
+                // MUDANÇA PRINCIPAL AQUI:
+                // Usamos a função REPLACE() do MySQL para remover '.' e '-' da coluna `p.cpf` antes de comparar.
+                query = `${baseQuery} WHERE REPLACE(REPLACE(p.cpf, '.', ''), '-', '') = ? LIMIT 10`;
                 params = [cpfLimpo];
                 break;
             case 'prontuario':
@@ -860,44 +861,58 @@ router.get('/familias/buscar', async (req, res) => {
         }
     });
 
-    // Rota para CADASTRAR BENEFÍCIOS
-router.post('/beneficios', async (req, res) => {
-    const db = await connectToDatabase();
-    const transacao = await db.getConnection();
-
+    // Rota para CADASTRAR BENEFÍCIOS (SEM TOKEN e com validação de duplicidade no mês)
+router.post('/beneficios', async (req, res) => { // 'verifyToken' foi removido daqui
+    let transacao;
     try {
+        const db = await connectToDatabase();
+        transacao = await db.getConnection();
         await transacao.beginTransaction();
 
         const {
             familia_id, tipo_beneficio, descricao_beneficio, data_concessao,
-            valor, justificativa, data_entrega, observacoes
+            valor, justificativa, data_entrega, observacoes,
+            force // Flag para forçar o cadastro
         } = req.body;
         
-       
-        const responsavel_id = 1;
+        // IMPORTANTE: Como não há token, definimos um ID de responsável fixo para o teste.
+        // Certifique-se de que este ID existe na sua tabela `usuarios`.
+        const responsavel_id = 1; // <-- COLOQUE UM ID DE USUÁRIO VÁLIDO AQUI!
 
-        // --- Verificações ---
+        // --- Validações Iniciais ---
         if (!familia_id || !tipo_beneficio || !justificativa) {
             await transacao.release();
-            return res.status(400).json({ message: 'Campos obrigatórios não foram preenchidos.' });
+            return res.status(400).json({ message: 'Campos obrigatórios não preenchidos.' });
         }
 
-        const [familia] = await transacao.query('SELECT id FROM familias WHERE id = ?', [familia_id]);
-        if (familia.length === 0) {
-            await transacao.release();
-            return res.status(404).json({ message: 'Erro: A família selecionada não foi encontrada no banco de dados.' });
+        // --- VALIDAÇÃO DE DUPLICIDADE NO MÊS ---
+        if (!force) {
+            const [existente] = await transacao.query(
+                `SELECT id FROM beneficios WHERE 
+                    familia_id = ? AND 
+                    MONTH(data_concessao) = MONTH(CURDATE()) AND 
+                    YEAR(data_concessao) = YEAR(CURDATE())`,
+                [familia_id]
+            );
+
+            if (existente.length > 0) {
+                await transacao.release();
+                return res.status(409).json({
+                    message: 'Esta família já recebeu um benefício este mês.',
+                    requiresConfirmation: true
+                });
+            }
         }
         
         const dataEntregaFinal = data_entrega ? data_entrega : null;
 
-        // --- Inserção no Banco de Dados ---
+        // --- Lógica de Inserção ---
         const sqlQuery = `
             INSERT INTO beneficios (
                 familia_id, tipo_beneficio, descricao_beneficio, data_concessao, valor,
                 justificativa, responsavel_id, status, data_entrega, observacoes
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
-        
         const params = [
             familia_id, tipo_beneficio, descricao_beneficio || '', data_concessao,
             valor || 0, justificativa, responsavel_id, 'concedido',
@@ -917,17 +932,15 @@ router.post('/beneficios', async (req, res) => {
         `, [beneficio_id]);
         
         await transacao.release();
-        res.status(201).json(beneficioInserido[0]);
+        return res.status(201).json(beneficioInserido[0]);
 
-    } catch (error) {
+    } catch (err) {
         if (transacao) {
             await transacao.rollback();
             await transacao.release();
         }
-        console.error('💥 ERRO CRÍTICO AO REGISTRAR BENEFÍCIO (MODO DE TESTE SEM TOKEN):', error);
-        res.status(500).json({ 
-            message: error.sqlMessage || error.message || 'Ocorreu um erro desconhecido no servidor.' 
-        });
+        console.error("Erro ao registrar benefício (modo de teste):", err); 
+        return res.status(500).json({ message: 'server error' });
     }
 });
 
