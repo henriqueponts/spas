@@ -403,6 +403,9 @@ router.post('/familias', verifyToken, async (req, res) => {
         if (!responsavel?.nome_completo) {
             throw new Error('Nome do responsável é obrigatório');
         }
+         if (!responsavel.data_nascimento) {
+            throw new Error('Data de nascimento do responsável é obrigatória');
+        }
         if (!endereco?.logradouro) {
             throw new Error('Logradouro é obrigatório');
         }
@@ -441,7 +444,7 @@ router.post('/familias', verifyToken, async (req, res) => {
         `, [
             familia_id, 
             responsavel.nome_completo || '', 
-            responsavel.data_nascimento || null,
+            responsavel.data_nascimento,
             responsavel.sexo || 'feminino', 
             responsavel.cpf || '', 
             responsavel.rg || '', 
@@ -1175,6 +1178,13 @@ router.put('/familias/:id', verifyToken, async (req, res) => {
         if (integrantes && Array.isArray(integrantes) && integrantes.length > 0) {
             for (let i = 0; i < integrantes.length; i++) {
                 const integrante = integrantes[i];
+
+                if (!integrante.data_nascimento) {
+                    throw new Error(`Data de nascimento do integrante '${integrante.nome_completo}' é obrigatória`);
+                } else if (!isDateInPast(integrante.data_nascimento)) {
+                    throw new Error(`Data de nascimento do integrante '${integrante.nome_completo}' não pode ser no futuro`);
+                }
+
                 await db.query(`
                     INSERT INTO pessoas (
                         familia_id, nome_completo, data_nascimento, sexo, cpf, rg,
@@ -1185,7 +1195,7 @@ router.put('/familias/:id', verifyToken, async (req, res) => {
                     familia_id,
                     integrante.nome_completo || '',
                     integrante.data_nascimento || null,
-                    integrante.sexo || 'feminino',
+                    integrante.sexo || 'Outro',
                     integrante.cpf || '',
                     integrante.rg || '',
                     integrante.estado_civil || '',
