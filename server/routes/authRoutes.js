@@ -143,18 +143,31 @@ router.get('/equipamentos', async (req, res) => {
 });
 
 const verifyToken = async (req, res, next) => {
-    try {
-        const token = req.headers['authorization'].split(' ')[1];
-        if (!token) {
-            return res.status(401).json({ message: 'Token não fornecido' });
-        }
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.userId = decoded.id;
-        next()
-    } catch (err) {
-        return res.status(500).json({ message: 'server error' })
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+        return res.status(403).json({ message: 'Nenhum token fornecido.' });
     }
-}
+
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(403).json({ message: 'Formato do token inválido.' });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            // Se o erro for de expiração, envie uma mensagem específica
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({ message: 'Sessão expirada. Por favor, faça login novamente.' });
+            }
+            // Para outros erros de token (malformado, etc.)
+            return res.status(401).json({ message: 'Falha na autenticação do token.' });
+        }
+        
+        // Se o token for válido, anexa o ID do usuário à requisição
+        req.userId = decoded.id;
+        next();
+    });
+};
 
 router.get('/home', verifyToken, async (req, res) => {
     try {

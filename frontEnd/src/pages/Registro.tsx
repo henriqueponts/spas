@@ -165,7 +165,7 @@ const Registro: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
       <Header /> {/* ✅ ADICIONADO: Header na página principal */}
 
       <div className="flex items-center justify-center min-h-[calc(100vh-64px)] py-8">

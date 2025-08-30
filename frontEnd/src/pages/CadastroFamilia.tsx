@@ -2030,23 +2030,24 @@ const CadastroFamilia: React.FC = () => {
           <p className="text-gray-600 mt-2">Preencha os dados da família ou indivíduo</p>
         </div>
 
-        {/* Mensagens */}
-        {message && (
-          <Alert
-            className={`mb-6 ${messageType === "success" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}
-          >
-            <div className={messageType === "success" ? "text-green-800" : "text-red-800"}>{message}</div>
-          </Alert>
-        )}
-
         {/* Indicador de Progresso */}
         <IndicadorProgresso />
 
         {/* Conteúdo da Etapa Atual */}
         {renderizarEtapa()}
 
+        {/* Mensagens */}
+        {message && (
+          <Alert
+            className={`mt-4 ${messageType === "success" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}
+          >
+            <div className={messageType === "success" ? "text-green-800" : "text-red-800"}>{message}</div>
+          </Alert>
+        )}
+
+
         {/* Botões de Navegação */}
-        <Card className="mt-8">
+        <Card className="mt-4">
           <CardFooter className="flex justify-between items-center p-6">
             <div className="flex gap-4">
               <Button variant="outline" onClick={() => window.history.back()}>
