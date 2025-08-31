@@ -4,7 +4,21 @@ import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import Header from "../components/Header"
 import api from "../services/api"
-import { UserPlus, Search, Filter, UserX, UserCheck, BadgeIcon as IdCard, MapPin, Calendar, Eye, EyeOff, Loader2, LockKeyhole, X } from 'lucide-react'
+import {
+  UserPlus,
+  Search,
+  Filter,
+  UserX,
+  UserCheck,
+  Award as IdCard,
+  MapPin,
+  Calendar,
+  Eye,
+  EyeOff,
+  Loader2,
+  LockKeyhole,
+  X,
+} from "lucide-react"
 import { useNavigate } from "react-router-dom"
 
 // Interfaces (mantidas como estão)
@@ -23,7 +37,7 @@ interface Usuario {
 }
 
 const Usuarios: React.FC = () => {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const navigate = useNavigate()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -35,8 +49,7 @@ const Usuarios: React.FC = () => {
   const [novaSenha, setNovaSenha] = useState("")
   const [mostrarNovaSenha, setMostrarNovaSenha] = useState(false)
 
-  // Lógica de permissão mais robusta com useMemo
-  const hasPermission = useMemo(() => user?.cargo_nome === "DIRETOR", [user])
+  const hasPermission = useMemo(() => user?.cargo_nome === "DIRETOR" || user?.cargo_nome === "COORDENADOR", [user])
 
   // useEffect para buscar dados
   useEffect(() => {
@@ -119,8 +132,18 @@ const Usuarios: React.FC = () => {
       alert("Senha alterada com sucesso!")
     } catch (error: unknown) {
       console.error("Erro ao trocar senha:", error)
-      if (error && typeof error === "object" && "response" in error && error.response && typeof error.response === "object" && "data" in error.response.data && typeof error.response.data === "object" && "message" in error.response.data) {
-        alert(error.response.data.message)
+      if (
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response &&
+        typeof error.response === "object" &&
+        "data" in error.response &&
+        error.response.data &&
+        typeof error.response.data === "object" &&
+        "message" in error.response.data
+      ) {
+        alert((error.response.data as { message?: string }).message)
       } else {
         alert("Erro ao alterar senha")
       }

@@ -84,7 +84,7 @@ const Header: React.FC = () => {
                 <span>Benefícios</span>
               </button>
 
-              {user.cargo_nome === "DIRETOR" && (
+              {(user.cargo_nome === "DIRETOR" || user.cargo_nome === "COORDENADOR") && (
                 <button onClick={() => navigate("/usuarios")} className={getNavItemClasses(["/usuarios", "/registro"])}>
                   <User size={16} />
                   <span>Usuários</span>
@@ -161,8 +161,11 @@ const Header: React.FC = () => {
                 <span>Benefícios</span>
               </button>
 
-              {user.cargo_nome === "DIRETOR" && (
-                <button onClick={() => navigate("/usuarios")} className={getMobileNavItemClasses(["/usuarios","/registro"])}>
+              {(user.cargo_nome === "DIRETOR" || user.cargo_nome === "COORDENADOR") && (
+                <button
+                  onClick={() => navigate("/usuarios")}
+                  className={getMobileNavItemClasses(["/usuarios", "/registro"])}
+                >
                   <User size={16} />
                   <span>Usuários</span>
                 </button>
