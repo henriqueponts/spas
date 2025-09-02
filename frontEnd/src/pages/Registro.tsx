@@ -86,6 +86,7 @@ const Registro: React.FC = () => {
   // Função para validar a senha
   const validatePassword = (password: string): string | undefined => {
     if (password.length < 6) return "A senha deve ter no mínimo 6 caracteres"
+    if (/\s/.test(password)) return "A senha não pode conter espaços"
     if (!/\d/.test(password)) return "A senha deve conter pelo menos um número"
     if (!/[a-zA-Z]/.test(password)) return "A senha deve conter pelo menos uma letra"
     return undefined
@@ -167,14 +168,10 @@ const Registro: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
       <Header /> {/* ✅ ADICIONADO: Header na página principal */}
-
       <div className="flex items-center justify-center min-h-[calc(100vh-64px)] py-8">
-
-       
         {" "}
         {/* ✅ MODIFICADO: Ajustado altura e adicionado padding vertical */}
         <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-            
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Criar Novo Usuário</h2>
 
           {error && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{error}</div>}

@@ -48,9 +48,18 @@ const Usuarios: React.FC = () => {
   const [usuarioSelecionado, setUsuarioSelecionado] = useState<Usuario | null>(null)
   const [novaSenha, setNovaSenha] = useState("")
   const [mostrarNovaSenha, setMostrarNovaSenha] = useState(false)
+  const [erroSenha, setErroSenha] = useState<string>("")
 
   // Lógica de permissão mais robusta com useMemo
   const hasPermission = useMemo(() => user?.cargo_nome === "DIRETOR", [user])
+
+  const validarSenha = (senha: string): string => {
+    if (senha.length < 6) return "A senha deve ter no mínimo 6 caracteres"
+    if (/\s/.test(senha)) return "A senha não pode conter espaços"
+    if (!/\d/.test(senha)) return "A senha deve conter pelo menos um número"
+    if (!/[a-zA-Z]/.test(senha)) return "A senha deve conter pelo menos uma letra"
+    return ""
+  }
 
   // useEffect para buscar dados
   useEffect(() => {
@@ -82,7 +91,6 @@ const Usuarios: React.FC = () => {
     carregarDados()
   }, [hasPermission])
 
-  // Lógica de filtragem com useMemo para otimização
   const usuariosFiltrados = useMemo(() => {
     return usuarios.filter((usuario) => {
       const termo = termoBusca.toLowerCase()
@@ -101,7 +109,6 @@ const Usuarios: React.FC = () => {
     })
   }, [usuarios, termoBusca, filtroStatus])
 
-  // Função para alterar status do usuário
   const alternarStatusUsuario = async (usuarioId: string) => {
     if (String(user?.id) === usuarioId && usuarios.find((u) => u.id === usuarioId)?.ativo) {
       alert("Você não pode inativar seu próprio usuário!")
@@ -117,16 +124,27 @@ const Usuarios: React.FC = () => {
     }
   }
 
-  // Função para abrir modal de trocar senha
   const abrirModalSenha = (usuario: Usuario) => {
     setUsuarioSelecionado(usuario)
     setNovaSenha("")
+    setErroSenha("")
     setMostrarModalSenha(true)
   }
 
-  // Função para trocar senha
+  const handleSenhaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const senha = e.target.value
+    setNovaSenha(senha)
+    setErroSenha(validarSenha(senha))
+  }
+
   const trocarSenha = async () => {
     if (!usuarioSelecionado || !novaSenha) return
+
+    const erroValidacao = validarSenha(novaSenha)
+    if (erroValidacao) {
+      setErroSenha(erroValidacao)
+      return
+    }
 
     try {
       await api.put(`/auth/usuarios/${usuarioSelecionado.id}/senha`, {
@@ -135,6 +153,7 @@ const Usuarios: React.FC = () => {
       setMostrarModalSenha(false)
       setUsuarioSelecionado(null)
       setNovaSenha("")
+      setErroSenha("")
       alert("Senha alterada com sucesso!")
     } catch (error: unknown) {
       console.error("Erro ao trocar senha:", error)
@@ -156,7 +175,6 @@ const Usuarios: React.FC = () => {
     }
   }
 
-  // Funções de formatação
   const obterBadgeStatus = (ativo: boolean) => {
     return ativo ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"
   }
@@ -173,7 +191,6 @@ const Usuarios: React.FC = () => {
     return data ? new Date(data).toLocaleString("pt-BR") : "Nunca"
   }
 
-  // Renderização de Loading
   if (carregando) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
@@ -185,7 +202,6 @@ const Usuarios: React.FC = () => {
     )
   }
 
-  // Renderização de Acesso Negado
   if (!hasPermission) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
@@ -201,7 +217,6 @@ const Usuarios: React.FC = () => {
     )
   }
 
-  // Renderização de Erro
   if (erro) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
@@ -216,12 +231,10 @@ const Usuarios: React.FC = () => {
     )
   }
 
-  // Renderização Principal
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Seção do Cabeçalho */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
@@ -238,7 +251,6 @@ const Usuarios: React.FC = () => {
           </div>
         </div>
 
-        {/* Filtros */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
             <div className="flex-1">
@@ -268,7 +280,6 @@ const Usuarios: React.FC = () => {
           </div>
         </div>
 
-        {/* Lista de Usuários */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Usuários ({usuariosFiltrados.length})</h2>
@@ -332,7 +343,6 @@ const Usuarios: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  {/* Botões de Ação - CORES MELHORADAS */}
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => abrirModalSenha(usuario)}
@@ -371,11 +381,9 @@ const Usuarios: React.FC = () => {
         )}
       </main>
 
-      {/* Modal Trocar Senha - BACKGROUND IGUAL À PÁGINA */}
       {mostrarModalSenha && usuarioSelecionado && (
         <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-white to-blue-100 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-200 ring-1 ring-gray-900/5">
-            {/* Header do Modal */}
             <div className="relative p-8 pb-6">
               <button
                 onClick={() => setMostrarModalSenha(false)}
@@ -393,7 +401,6 @@ const Usuarios: React.FC = () => {
                 </p>
               </div>
             </div>
-            {/* Formulário */}
             <div className="px-8 pb-8 space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Nova Senha *</label>
@@ -401,8 +408,8 @@ const Usuarios: React.FC = () => {
                   <input
                     type={mostrarNovaSenha ? "text" : "password"}
                     value={novaSenha}
-                    onChange={(e) => setNovaSenha(e.target.value)}
-                    className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white/70 backdrop-blur-sm"
+                    onChange={handleSenhaChange}
+                    className={`w-full px-4 py-3 pr-12 border ${erroSenha ? "border-red-500" : "border-gray-200"} rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white/70 backdrop-blur-sm`}
                     placeholder="Digite a nova senha"
                   />
                   <button
@@ -413,8 +420,8 @@ const Usuarios: React.FC = () => {
                     {mostrarNovaSenha ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
+                {erroSenha && <p className="mt-1 text-sm text-red-600">{erroSenha}</p>}
               </div>
-              {/* Botões */}
               <div className="flex space-x-4 pt-4">
                 <button
                   onClick={() => setMostrarModalSenha(false)}
@@ -424,7 +431,7 @@ const Usuarios: React.FC = () => {
                 </button>
                 <button
                   onClick={trocarSenha}
-                  disabled={!novaSenha}
+                  disabled={!novaSenha || !!erroSenha}
                   className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl font-medium transition-colors"
                 >
                   Alterar Senha

@@ -2,29 +2,28 @@
 
 import type React from "react"
 import { useState, useEffect, useCallback } from "react"
-import {
-  ArrowLeft,
-  User,
-  Users,
-  Heart,
-  Home,
-  Briefcase,
-  Globe,
-  Save,
-  FileText,
-  ChevronLeft,
-  ChevronRight,
-  Check,
-} from "lucide-react"
+import { User, Users, Heart, Home, Briefcase, Globe, Save, ChevronLeft, ChevronRight, Check } from "lucide-react"
 import { Button } from "../components/ui/Button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../components/ui/Card"
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { Alert } from "../components/ui/Alert"
 import { Separator } from "../components/ui/Separator"
 import api from "../services/api"
 import Header from "../components/Header"
 import {
-  formatCPF, formatPhone, formatCEP, formatNumericOnly, formatUF, formatToUpper, cleanExtraSpaces,
-  isValidCPF, isValidNIS, isDateInPast, isValidEmail, isValidTituloEleitor, isValidName, isMeaningfulText,
+  formatCPF,
+  formatPhone,
+  formatCEP,
+  formatNumericOnly,
+  formatUF,
+  formatToUpper,
+  cleanExtraSpaces,
+  isValidCPF,
+  isValidNIS,
+  isDateInPast,
+  isValidEmail,
+  isValidTituloEleitor,
+  isValidName,
+  isMeaningfulText,
 } from "../utils/formUtils"
 
 // Tipos baseados na estrutura do banco
@@ -139,17 +138,18 @@ interface DadosFamilia {
 }
 
 type FormErrors = {
-  profissional_id?: string;
-  responsavel?: Partial<Record<keyof IntegranteFamiliar, string>>;
-  endereco?: Partial<Record<keyof DadosFamilia['endereco'], string>>;
-  integrantes?: Array<Partial<Record<keyof IntegranteFamiliar, string>> | null>;
-  saude?: Partial<Record<keyof DadosFamilia['saude'], string>>;
-  habitacao?: Partial<Record<keyof DadosFamilia['habitacao'], string>>;
-  trabalho_renda?: Partial<Record<keyof DadosFamilia['trabalho_renda'], string>>;
-  programas_sociais?: Array<{ valor?: string } | null>;
-  despesas?: Array<{ valor?: string } | null>;
-  situacao_social?: Partial<Record<keyof DadosFamilia['situacao_social'], string>>;
-};
+  profissional_id?: string
+  responsavel?: Partial<Record<keyof IntegranteFamiliar, string>>
+  endereco?: Partial<Record<keyof DadosFamilia["endereco"], string>>
+  integrantes?: Array<Partial<Record<keyof IntegranteFamiliar, string>> | null>
+  saude?: Partial<Record<keyof DadosFamilia["saude"], string>>
+  habitacao?: Partial<Record<keyof DadosFamilia["habitacao"], string>>
+  trabalho_renda?: Partial<Record<keyof DadosFamilia["trabalho_renda"], string>>
+  programas_sociais?: Array<{ valor?: string } | null>
+  despesas?: Array<{ valor?: string } | null>
+  situacao_social?: Partial<Record<keyof DadosFamilia["situacao_social"], string>>
+  equipamento_id?: string
+}
 
 // Definição das etapas
 const ETAPAS = [
@@ -300,40 +300,50 @@ const CadastroFamilia: React.FC = () => {
     }, 5000)
   }
 
-const validarEtapa = (etapa: number): boolean => {
-    // CORRIGIDO: Tipagem e remoção de variáveis não usadas
+  const validarEtapa = (etapa: number): boolean => {
     const newErrors: FormErrors = {}
-    const { responsavel, endereco, integrantes, saude, habitacao, trabalho_renda, situacao_social, programas_sociais, despesas } = dadosFamilia
+    const {
+      responsavel,
+      endereco,
+      integrantes,
+      saude,
+      habitacao,
+      trabalho_renda,
+      situacao_social,
+      programas_sociais,
+      despesas,
+    } = dadosFamilia
 
     switch (etapa) {
       case 0: // Identificação
+        if (!dadosFamilia.equipamento_id || dadosFamilia.equipamento_id === 0) {
+          newErrors.equipamento_id = "Selecione o equipamento."
+        }
+
         if (!dadosFamilia.profissional_id || dadosFamilia.profissional_id === 0) {
           newErrors.profissional_id = "Selecione o profissional responsável."
         }
         if (!responsavel.nome_completo.trim()) {
           newErrors.responsavel = { ...newErrors.responsavel, nome_completo: "Nome completo é obrigatório." }
         } else if (!isValidName(responsavel.nome_completo, true)) {
-          newErrors.responsavel = { ...newErrors.responsavel, nome_completo: "Por favor, insira um nome e sobrenome válidos." }
+          newErrors.responsavel = {
+            ...newErrors.responsavel,
+            nome_completo: "Por favor, insira um nome e sobrenome válidos.",
+          }
         }
-        if (responsavel.data_nascimento && !isDateInPast(responsavel.data_nascimento)) {
-          newErrors.responsavel = { ...newErrors.responsavel, data_nascimento: "Data de nascimento não pode ser no futuro." }
-        }
-        if (!responsavel.data_nascimento) { // Verifica se a string está vazia
-          if(!newErrors.responsavel) newErrors.responsavel = {};
-          newErrors.responsavel.data_nascimento = "Data de nascimento é obrigatória.";
+        if (!responsavel.data_nascimento) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.data_nascimento = "Data de nascimento é obrigatória."
         } else if (!isDateInPast(responsavel.data_nascimento)) {
-          if(!newErrors.responsavel) newErrors.responsavel = {};
-          newErrors.responsavel.data_nascimento = "Data de nascimento não pode ser no futuro.";
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.data_nascimento = "Data de nascimento não pode ser no futuro."
         }
         if (!responsavel.cpf) {
-          if(!newErrors.responsavel) newErrors.responsavel = {};
-          newErrors.responsavel.cpf = "CPF é obrigatório.";
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.cpf = "CPF é obrigatório."
         } else if (!isValidCPF(responsavel.cpf)) {
-          if(!newErrors.responsavel) newErrors.responsavel = {};
-          newErrors.responsavel.cpf = "CPF inválido.";
-        }
-        if (responsavel.cpf && !isValidCPF(responsavel.cpf)) {
-          newErrors.responsavel = { ...newErrors.responsavel, cpf: "CPF inválido." }
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.cpf = "CPF inválido."
         }
         if (responsavel.email && !isValidEmail(responsavel.email)) {
           newErrors.responsavel = { ...newErrors.responsavel, email: "E-mail inválido." }
@@ -356,10 +366,11 @@ const validarEtapa = (etapa: number): boolean => {
         }
         break
 
-      case 1: { // Adicionado bloco de escopo
-        const integrantesErrors: Array<Partial<Record<keyof IntegranteFamiliar, string>> | null> = [];
+      case 1: {
+        // Adicionado bloco de escopo
+        const integrantesErrors: Array<Partial<Record<keyof IntegranteFamiliar, string>> | null> = []
         integrantes.forEach((integrante, index) => {
-          const integranteError: Partial<Record<keyof IntegranteFamiliar, string>> = {};
+          const integranteError: Partial<Record<keyof IntegranteFamiliar, string>> = {}
           if (!integrante.nome_completo.trim()) {
             integranteError.nome_completo = "Nome é obrigatório."
           } else if (!isValidName(integrante.nome_completo)) {
@@ -369,101 +380,81 @@ const validarEtapa = (etapa: number): boolean => {
             integranteError.data_nascimento = "Data não pode ser no futuro."
           }
           if (!integrante.cpf) {
-            integranteError.cpf = "CPF é obrigatório.";
+            integranteError.cpf = "CPF é obrigatório."
           } else if (!isValidCPF(integrante.cpf)) {
-            integranteError.cpf = "CPF inválido.";
+            integranteError.cpf = "CPF inválido."
           }
           if (integrante.cpf && !isValidCPF(integrante.cpf)) {
             integranteError.cpf = "CPF inválido."
           }
-          
+
           if (!integrante.data_nascimento) {
-            integranteError.data_nascimento = "Data de nascimento é obrigatória.";
+            integranteError.data_nascimento = "Data de nascimento é obrigatória."
           } else if (!isDateInPast(integrante.data_nascimento)) {
-            integranteError.data_nascimento = "Data não pode ser no futuro.";
+            integranteError.data_nascimento = "Data não pode ser no futuro."
           }
 
           if (Object.keys(integranteError).length > 0) {
-            integrantesErrors[index] = integranteError;
+            integrantesErrors[index] = integranteError
           } else {
-            integrantesErrors[index] = null;
+            integrantesErrors[index] = null
           }
-        });
-        if (integrantesErrors.some(e => e !== null)) {
-          newErrors.integrantes = integrantesErrors;
+        })
+        if (integrantesErrors.some((e) => e !== null)) {
+          newErrors.integrantes = integrantesErrors
         }
         break
       }
 
       case 2: // Saúde
         if (saude.tem_deficiencia && !isMeaningfulText(saude.deficiencia_qual)) {
-            newErrors.saude = { ...newErrors.saude, deficiencia_qual: "Descrição inválida." };
+          newErrors.saude = { ...newErrors.saude, deficiencia_qual: "Descrição inválida." }
         }
         if (saude.tem_tratamento_saude && !isMeaningfulText(saude.tratamento_qual)) {
-            newErrors.saude = { ...newErrors.saude, tratamento_qual: "Descrição inválida." };
+          newErrors.saude = { ...newErrors.saude, tratamento_qual: "Descrição inválida." }
         }
         if (saude.usa_medicacao_continua && !isMeaningfulText(saude.medicacao_qual)) {
-            newErrors.saude = { ...newErrors.saude, medicacao_qual: "Descrição inválida." };
+          newErrors.saude = { ...newErrors.saude, medicacao_qual: "Descrição inválida." }
         }
         if (saude.tem_dependente_cuidados && !isMeaningfulText(saude.dependente_quem)) {
-            newErrors.saude = { ...newErrors.saude, dependente_quem: "Descrição inválida." };
+          newErrors.saude = { ...newErrors.saude, dependente_quem: "Descrição inválida." }
         }
-        break;
+        break
 
       case 3: // Habitação
         if (habitacao.qtd_comodos < 0) {
-            newErrors.habitacao = { ...newErrors.habitacao, qtd_comodos: "Valor não pode ser negativo." };
+          newErrors.habitacao = { ...newErrors.habitacao, qtd_comodos: "Valor não pode ser negativo." }
         }
         if (habitacao.qtd_dormitorios < 0) {
-            newErrors.habitacao = { ...newErrors.habitacao, qtd_dormitorios: "Valor não pode ser negativo." };
-        }
-        break;
-
-      case 4: { // Adicionado bloco de escopo
-        if (trabalho_renda.rendimento_total < 0) {
-            if(!newErrors.trabalho_renda) newErrors.trabalho_renda = {};
-            newErrors.trabalho_renda.rendimento_total = "Valor não pode ser negativo.";
-        }
-
-        const programasErrors: Array<{ valor?: string } | null> = [];
-        programas_sociais.forEach((programa, index) => {
-            if (programa.valor < 0) {
-                programasErrors[index] = { valor: "Valor não pode ser negativo." };
-            } else {
-                programasErrors[index] = null;
-            }
-        });
-        if (programasErrors.some(e => e !== null)) {
-            newErrors.programas_sociais = programasErrors;
-        }
-
-        const despesasErrors: Array<{ valor?: string } | null> = [];
-        despesas.forEach((despesa, index) => {
-            if (despesa.valor < 0) {
-                despesasErrors[index] = { valor: "Valor não pode ser negativo." };
-            } else {
-                despesasErrors[index] = null;
-            }
-        });
-        if (despesasErrors.some(e => e !== null)) {
-            newErrors.despesas = despesasErrors;
+          newErrors.habitacao = { ...newErrors.habitacao, qtd_dormitorios: "Valor não pode ser negativo." }
         }
         break
-      }
+
+      case 4: // Trabalho e Renda
+        if (trabalho_renda.rendimento_total !== undefined && trabalho_renda.rendimento_total !== null) {
+          const rendaNum = Number(trabalho_renda.rendimento_total)
+          if (isNaN(rendaNum) || rendaNum < 0) {
+            newErrors.trabalho_renda = {
+              ...newErrors.trabalho_renda,
+              rendimento_total: "Rendimento familiar deve ser um valor válido e não negativo.",
+            }
+          }
+        }
+        break
 
       case 5: // Social
         if (situacao_social.participa_religiao && !isMeaningfulText(situacao_social.religiao_qual)) {
-            newErrors.situacao_social = { ...newErrors.situacao_social, religiao_qual: "Descrição inválida." };
+          newErrors.situacao_social = { ...newErrors.situacao_social, religiao_qual: "Descrição inválida." }
         }
         if (situacao_social.participa_acao_social && !isMeaningfulText(situacao_social.acao_social_qual)) {
-            newErrors.situacao_social = { ...newErrors.situacao_social, acao_social_qual: "Descrição inválida." };
+          newErrors.situacao_social = { ...newErrors.situacao_social, acao_social_qual: "Descrição inválida." }
         }
-        break;
+        break
     }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
-}
+  }
 
   const proximaEtapa = () => {
     if (validarEtapa(etapaAtual)) {
@@ -578,8 +569,32 @@ const validarEtapa = (etapa: number): boolean => {
         window.location.href = "/familias"
       }, 2000)
     } catch (error: unknown) {
-      console.error("❌ Erro completo:", error)
-      // ... (lógica de tratamento de erro) ...
+      console.error("❌ Erro ao salvar família:", error)
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as any
+
+        if (axiosError.response?.status === 400) {
+          const errorMessage = axiosError.response?.data?.message || axiosError.response?.data?.error
+
+          // Tratamento específico para CPF duplicado
+          if (errorMessage && errorMessage.toLowerCase().includes("cpf")) {
+            showMessage("CPF já cadastrado no sistema. Verifique os dados informados.", "error")
+          } else if (errorMessage && errorMessage.toLowerCase().includes("equipamento")) {
+            showMessage("Equipamento inválido ou não selecionado.", "error")
+          } else if (errorMessage && errorMessage.toLowerCase().includes("renda")) {
+            showMessage("Valor de renda inválido. Verifique os campos de renda.", "error")
+          } else {
+            showMessage(errorMessage || "Dados inválidos. Verifique os campos preenchidos.", "error")
+          }
+        } else if (axiosError.response?.status === 500) {
+          showMessage("Erro interno do servidor. Tente novamente em alguns minutos.", "error")
+        } else {
+          showMessage("Erro ao cadastrar família. Verifique os dados e tente novamente.", "error")
+        }
+      } else {
+        showMessage("Erro de conexão. Verifique sua internet e tente novamente.", "error")
+      }
     } finally {
       setLoading(false)
     }
@@ -643,7 +658,7 @@ const validarEtapa = (etapa: number): boolean => {
   const renderizarEtapa = () => {
     const getInputClass = (fieldError: string | undefined) =>
       `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-        fieldError ? 'border-red-500' : 'border-gray-300'
+        fieldError ? "border-red-500" : "border-gray-300"
       }`
 
     const renderError = (fieldError: string | undefined) =>
@@ -672,28 +687,37 @@ const validarEtapa = (etapa: number): boolean => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                  <div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Profissional Responsável *</label>
                   <select
                     value={dadosFamilia.profissional_id}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, profissional_id: Number.parseInt(e.target.value) }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({ ...prev, profissional_id: Number.parseInt(e.target.value) }))
+                    }
                     className={getInputClass(errors.profissional_id)}
                   >
                     <option value={0}>Selecione o profissional</option>
                     {usuarios.map((usuario) => (
-                      <option key={usuario.id} value={usuario.id}>{usuario.nome}</option>
+                      <option key={usuario.id} value={usuario.id}>
+                        {usuario.nome}
+                      </option>
                     ))}
                   </select>
                   {renderError(errors.profissional_id)}
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Equipamento</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Equipamento <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={dadosFamilia.equipamento_id}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({ ...prev, equipamento_id: Number.parseInt(e.target.value) }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.equipamento_id ? "border-red-500" : "border-gray-300"
+                    }`}
                   >
                     <option value={0}>Selecione o equipamento</option>
                     {equipamentos.map((equipamento) => (
@@ -702,6 +726,7 @@ const validarEtapa = (etapa: number): boolean => {
                       </option>
                     ))}
                   </select>
+                  {errors.equipamento_id && <p className="text-red-500 text-sm mt-1">{errors.equipamento_id}</p>}
                 </div>
               </div>
 
@@ -716,8 +741,18 @@ const validarEtapa = (etapa: number): boolean => {
                     <input
                       type="text"
                       value={dadosFamilia.responsavel.nome_completo}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nome_completo: e.target.value } }))}
-                      onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nome_completo: cleanExtraSpaces(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, nome_completo: e.target.value },
+                        }))
+                      }
+                      onBlur={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, nome_completo: cleanExtraSpaces(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.responsavel?.nome_completo)}
                     />
                     {renderError(errors.responsavel?.nome_completo)}
@@ -727,7 +762,12 @@ const validarEtapa = (etapa: number): boolean => {
                     <input
                       type="date"
                       value={dadosFamilia.responsavel.data_nascimento}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, data_nascimento: e.target.value } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, data_nascimento: e.target.value },
+                        }))
+                      }
                       className={getInputClass(errors.responsavel?.data_nascimento)}
                     />
                     {renderError(errors.responsavel?.data_nascimento)}
@@ -758,7 +798,12 @@ const validarEtapa = (etapa: number): boolean => {
                       type="text"
                       maxLength={14}
                       value={dadosFamilia.responsavel.cpf}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, cpf: formatCPF(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, cpf: formatCPF(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.responsavel?.cpf)}
                     />
                     {renderError(errors.responsavel?.cpf)}
@@ -783,7 +828,12 @@ const validarEtapa = (etapa: number): boolean => {
                     <input
                       type="text"
                       value={dadosFamilia.responsavel.orgao_expedidor}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, orgao_expedidor: formatToUpper(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, orgao_expedidor: formatToUpper(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.responsavel?.orgao_expedidor)}
                     />
                     {renderError(errors.responsavel?.orgao_expedidor)}
@@ -829,7 +879,12 @@ const validarEtapa = (etapa: number): boolean => {
                       type="text"
                       maxLength={15}
                       value={dadosFamilia.responsavel.telefone}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, telefone: formatPhone(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, telefone: formatPhone(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.responsavel?.telefone)}
                     />
                     {renderError(errors.responsavel?.telefone)}
@@ -856,7 +911,12 @@ const validarEtapa = (etapa: number): boolean => {
                     <input
                       type="email"
                       value={dadosFamilia.responsavel.email}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, email: e.target.value } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, email: e.target.value },
+                        }))
+                      }
                       className={getInputClass(errors.responsavel?.email)}
                     />
                     {renderError(errors.responsavel?.email)}
@@ -867,7 +927,12 @@ const validarEtapa = (etapa: number): boolean => {
                       type="text"
                       maxLength={11}
                       value={dadosFamilia.responsavel.nis}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nis: formatNumericOnly(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, nis: formatNumericOnly(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.responsavel?.nis)}
                     />
                     {renderError(errors.responsavel?.nis)}
@@ -878,7 +943,12 @@ const validarEtapa = (etapa: number): boolean => {
                       type="text"
                       maxLength={12}
                       value={dadosFamilia.responsavel.titulo_eleitor}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, titulo_eleitor: formatNumericOnly(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, titulo_eleitor: formatNumericOnly(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.responsavel?.titulo_eleitor)}
                     />
                     {renderError(errors.responsavel?.titulo_eleitor)}
@@ -962,8 +1032,18 @@ const validarEtapa = (etapa: number): boolean => {
                     <input
                       type="text"
                       value={dadosFamilia.endereco.logradouro}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, logradouro: e.target.value } }))}
-                      onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, logradouro: cleanExtraSpaces(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, logradouro: e.target.value },
+                        }))
+                      }
+                      onBlur={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, logradouro: cleanExtraSpaces(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.endereco?.logradouro)}
                     />
                     {renderError(errors.endereco?.logradouro)}
@@ -1003,8 +1083,15 @@ const validarEtapa = (etapa: number): boolean => {
                     <input
                       type="text"
                       value={dadosFamilia.endereco.bairro}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: e.target.value } }))}
-                      onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: cleanExtraSpaces(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: e.target.value } }))
+                      }
+                      onBlur={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, bairro: cleanExtraSpaces(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.endereco?.bairro)}
                     />
                     {renderError(errors.endereco?.bairro)}
@@ -1029,7 +1116,12 @@ const validarEtapa = (etapa: number): boolean => {
                     <input
                       type="text"
                       value={dadosFamilia.endereco.uf}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, uf: formatUF(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, uf: formatUF(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.endereco?.uf)}
                     />
                     {renderError(errors.endereco?.uf)}
@@ -1040,7 +1132,12 @@ const validarEtapa = (etapa: number): boolean => {
                       type="text"
                       maxLength={9}
                       value={dadosFamilia.endereco.cep}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, cep: formatCEP(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, cep: formatCEP(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.endereco?.cep)}
                     />
                     {renderError(errors.endereco?.cep)}
@@ -1307,8 +1404,18 @@ const validarEtapa = (etapa: number): boolean => {
                     type="text"
                     placeholder="Descreva a deficiência"
                     value={dadosFamilia.saude.deficiencia_qual}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, deficiencia_qual: e.target.value } }))}
-                    onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, deficiencia_qual: cleanExtraSpaces(e.target.value) } }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        saude: { ...prev.saude, deficiencia_qual: e.target.value },
+                      }))
+                    }
+                    onBlur={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        saude: { ...prev.saude, deficiencia_qual: cleanExtraSpaces(e.target.value) },
+                      }))
+                    }
                     className={getInputClass(errors.saude?.deficiencia_qual)}
                   />
                   {renderError(errors.saude?.deficiencia_qual)}
@@ -1362,8 +1469,18 @@ const validarEtapa = (etapa: number): boolean => {
                     type="text"
                     placeholder="Descreva o tratamento"
                     value={dadosFamilia.saude.tratamento_qual}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, tratamento_qual: e.target.value } }))}
-                    onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, tratamento_qual: cleanExtraSpaces(e.target.value) } }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        saude: { ...prev.saude, tratamento_qual: e.target.value },
+                      }))
+                    }
+                    onBlur={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        saude: { ...prev.saude, tratamento_qual: cleanExtraSpaces(e.target.value) },
+                      }))
+                    }
                     className={getInputClass(errors.saude?.tratamento_qual)}
                   />
                   {renderError(errors.saude?.tratamento_qual)}
@@ -1415,8 +1532,15 @@ const validarEtapa = (etapa: number): boolean => {
                     type="text"
                     placeholder="Descreva a medicação"
                     value={dadosFamilia.saude.medicacao_qual}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, medicacao_qual: e.target.value } }))}
-                    onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, medicacao_qual: cleanExtraSpaces(e.target.value) } }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, medicacao_qual: e.target.value } }))
+                    }
+                    onBlur={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        saude: { ...prev.saude, medicacao_qual: cleanExtraSpaces(e.target.value) },
+                      }))
+                    }
                     className={getInputClass(errors.saude?.medicacao_qual)}
                   />
                   {renderError(errors.saude?.medicacao_qual)}
@@ -1470,25 +1594,36 @@ const validarEtapa = (etapa: number): boolean => {
                     type="text"
                     placeholder="Nome do dependente e tipo de cuidado"
                     value={dadosFamilia.saude.dependente_quem}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, dependente_quem: e.target.value } }))}
-                    onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, dependente_quem: cleanExtraSpaces(e.target.value) } }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        saude: { ...prev.saude, dependente_quem: e.target.value },
+                      }))
+                    }
+                    onBlur={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        saude: { ...prev.saude, dependente_quem: cleanExtraSpaces(e.target.value) },
+                      }))
+                    }
                     className={getInputClass(errors.saude?.dependente_quem)}
                   />
                   {renderError(errors.saude?.dependente_quem)}
                 </div>
               )}
-              <Separator />
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Observações sobre saúde</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
                 <textarea
-                  placeholder="Observações adicionais sobre a saúde da família"
-                  rows={3}
+                  placeholder="Outras informações relevantes sobre a saúde da família"
                   value={dadosFamilia.saude.observacoes}
                   onChange={(e) =>
+                    setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, observacoes: e.target.value } }))
+                  }
+                  onBlur={(e) =>
                     setDadosFamilia((prev) => ({
                       ...prev,
-                      saude: { ...prev.saude, observacoes: e.target.value },
+                      saude: { ...prev.saude, observacoes: cleanExtraSpaces(e.target.value) },
                     }))
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1504,30 +1639,40 @@ const validarEtapa = (etapa: number): boolean => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Home className="h-5 w-5 mb-1 text-blue-600" />
-                Condição Habitacional
+                Condições de Habitação
               </CardTitle>
-              <p className="text-sm text-gray-600">Informações sobre a moradia da família</p>
+              <p className="text-sm text-gray-600">Informações sobre as condições de moradia da família</p>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de cômodos</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de Cômodos</label>
                   <input
                     type="number"
-                    min="0"
+                    placeholder="Número de cômodos"
                     value={dadosFamilia.habitacao.qtd_comodos}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, habitacao: { ...prev.habitacao, qtd_comodos: Number.parseInt(e.target.value) || 0 } }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        habitacao: { ...prev.habitacao, qtd_comodos: Number.parseInt(e.target.value) || 0 },
+                      }))
+                    }
                     className={getInputClass(errors.habitacao?.qtd_comodos)}
                   />
                   {renderError(errors.habitacao?.qtd_comodos)}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de dormitórios</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de Dormitórios</label>
                   <input
                     type="number"
-                    min="0"
+                    placeholder="Número de dormitórios"
                     value={dadosFamilia.habitacao.qtd_dormitorios}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, habitacao: { ...prev.habitacao, qtd_dormitorios: Number.parseInt(e.target.value) || 0 } }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        habitacao: { ...prev.habitacao, qtd_dormitorios: Number.parseInt(e.target.value) || 0 },
+                      }))
+                    }
                     className={getInputClass(errors.habitacao?.qtd_dormitorios)}
                   />
                   {renderError(errors.habitacao?.qtd_dormitorios)}
@@ -1535,45 +1680,178 @@ const validarEtapa = (etapa: number): boolean => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Tipo de construção</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {["alvenaria", "madeira", "mista", "outro"].map((tipo) => (
-                    <label key={tipo} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={dadosFamilia.habitacao.tipo_construcao.includes(tipo)}
-                        onChange={(e) => handleCheckboxChange("habitacao", "tipo_construcao", tipo, e.target.checked)}
-                        className="mr-2"
-                      />
-                      <span className="text-sm capitalize">{tipo}</span>
-                    </label>
-                  ))}
+                <label className="block text-sm font-medium text-gray-700 mb-3">Tipo de Construção</label>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="alvenaria"
+                      checked={dadosFamilia.habitacao.tipo_construcao.includes("alvenaria")}
+                      onChange={(e) =>
+                        handleCheckboxChange("habitacao", "tipo_construcao", "alvenaria", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Alvenaria
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="madeira"
+                      checked={dadosFamilia.habitacao.tipo_construcao.includes("madeira")}
+                      onChange={(e) =>
+                        handleCheckboxChange("habitacao", "tipo_construcao", "madeira", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Madeira
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="mista"
+                      checked={dadosFamilia.habitacao.tipo_construcao.includes("mista")}
+                      onChange={(e) => handleCheckboxChange("habitacao", "tipo_construcao", "mista", e.target.checked)}
+                      className="mr-2"
+                    />
+                    Mista
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="taipa"
+                      checked={dadosFamilia.habitacao.tipo_construcao.includes("taipa")}
+                      onChange={(e) => handleCheckboxChange("habitacao", "tipo_construcao", "taipa", e.target.checked)}
+                      className="mr-2"
+                    />
+                    Taipa
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="outro"
+                      checked={dadosFamilia.habitacao.tipo_construcao.includes("outro")}
+                      onChange={(e) => handleCheckboxChange("habitacao", "tipo_construcao", "outro", e.target.checked)}
+                      className="mr-2"
+                    />
+                    Outro
+                  </label>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Condição do domicílio</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {[
-                    { value: "propria_quitada", label: "Própria/Quitada" },
-                    { value: "propria_financiada", label: "Própria/Financiada" },
-                    { value: "alugada", label: "Alugada" },
-                    { value: "cedida", label: "Cedida" },
-                    { value: "ocupada", label: "Ocupada" },
-                    { value: "situacao_rua", label: "Situação de Rua" },
-                  ].map((condicao) => (
-                    <label key={condicao.value} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={dadosFamilia.habitacao.condicao_domicilio.includes(condicao.value)}
-                        onChange={(e) =>
-                          handleCheckboxChange("habitacao", "condicao_domicilio", condicao.value, e.target.checked)
-                        }
-                        className="mr-2"
-                      />
-                      <span className="text-sm">{condicao.label}</span>
-                    </label>
-                  ))}
+                <label className="block text-sm font-medium text-gray-700 mb-3">Condição do Domicílio</label>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="propria_quitada"
+                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("propria_quitada")}
+                      onChange={(e) =>
+                        handleCheckboxChange("habitacao", "condicao_domicilio", "propria_quitada", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Própria Quitada
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="propria_financiada"
+                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("propria_financiada")}
+                      onChange={(e) =>
+                        handleCheckboxChange("habitacao", "condicao_domicilio", "propria_financiada", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Própria Financiada
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="alugada"
+                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("alugada")}
+                      onChange={(e) =>
+                        handleCheckboxChange("habitacao", "condicao_domicilio", "alugada", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Alugada
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="cedida"
+                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("cedida")}
+                      onChange={(e) =>
+                        handleCheckboxChange("habitacao", "condicao_domicilio", "cedida", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Cedida
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="ocupada"
+                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("ocupada")}
+                      onChange={(e) =>
+                        handleCheckboxChange("habitacao", "condicao_domicilio", "ocupada", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Ocupada
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="situacao_rua"
+                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("situacao_rua")}
+                      onChange={(e) =>
+                        handleCheckboxChange("habitacao", "condicao_domicilio", "situacao_rua", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Situação de Rua
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Possui área de conflito?</label>
+                <div className="flex gap-6">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="area_conflito"
+                      value="true"
+                      checked={dadosFamilia.habitacao.area_conflito === true}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          habitacao: { ...prev.habitacao, area_conflito: e.target.value === "true" },
+                        }))
+                      }
+                      className="mr-2"
+                    />
+                    Sim
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="area_conflito"
+                      value="false"
+                      checked={dadosFamilia.habitacao.area_conflito === false}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          habitacao: { ...prev.habitacao, area_conflito: e.target.value === "true" },
+                        }))
+                      }
+                      className="mr-2"
+                    />
+                    Não
+                  </label>
                 </div>
               </div>
 
@@ -1581,46 +1859,66 @@ const validarEtapa = (etapa: number): boolean => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Moradia em área de risco/conflito?
-                  </label>
-                  <div className="flex gap-6">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="area_conflito"
-                        value="true"
-                        checked={dadosFamilia.habitacao.area_conflito === true}
-                        onChange={(e) =>
-                          setDadosFamilia((prev) => ({
-                            ...prev,
-                            habitacao: { ...prev.habitacao, area_conflito: e.target.value === "true" },
-                          }))
-                        }
-                        className="mr-2"
-                      />
-                      Sim
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="area_conflito"
-                        value="false"
-                        checked={dadosFamilia.habitacao.area_conflito === false}
-                        onChange={(e) =>
-                          setDadosFamilia((prev) => ({
-                            ...prev,
-                            habitacao: { ...prev.habitacao, area_conflito: e.target.value === "true" },
-                          }))
-                        }
-                        className="mr-2"
-                      />
-                      Não
-                    </label>
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Energia Elétrica</label>
+                  <select
+                    value={dadosFamilia.habitacao.energia_eletrica}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        habitacao: { ...prev.habitacao, energia_eletrica: e.target.value },
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="propria">Própria</option>
+                    <option value="compartilhada">Compartilhada</option>
+                    <option value="nao_tem">Não Tem</option>
+                  </select>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">Coleta de lixo?</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Abastecimento de Água</label>
+                  <select
+                    value={dadosFamilia.habitacao.agua}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        habitacao: { ...prev.habitacao, agua: e.target.value },
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="propria">Própria</option>
+                    <option value="compartilhada">Compartilhada</option>
+                    <option value="rede_publica">Rede Pública</option>
+                    <option value="poco">Poço</option>
+                    <option value="carro_pipa">Carro Pipa</option>
+                    <option value="nao_tem">Não Tem</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Esgotamento Sanitário</label>
+                  <select
+                    value={dadosFamilia.habitacao.esgoto}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        habitacao: { ...prev.habitacao, esgoto: e.target.value },
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="rede">Rede</option>
+                    <option value="fossa_septica">Fossa Séptica</option>
+                    <option value="fossa_comum">Fossa Comum</option>
+                    <option value="ceu_aberto">Céu Aberto</option>
+                    <option value="nao_tem">Não Tem</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Coleta de Lixo</label>
                   <div className="flex gap-6">
                     <label className="flex items-center">
                       <input
@@ -1657,93 +1955,6 @@ const validarEtapa = (etapa: number): boolean => {
                   </div>
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Energia elétrica</label>
-                <div className="flex flex-wrap gap-6">
-                  {[
-                    { value: "propria", label: "Própria" },
-                    { value: "compartilhada", label: "Compartilhada" },
-                    { value: "sem_medidor", label: "Sem medidor" },
-                    { value: "nao_tem", label: "Não tem" },
-                  ].map((opcao) => (
-                    <label key={opcao.value} className="flex items-center">
-                      <input
-                        type="radio"
-                        name="energia_eletrica"
-                        value={opcao.value}
-                        checked={dadosFamilia.habitacao.energia_eletrica === opcao.value}
-                        onChange={(e) =>
-                          setDadosFamilia((prev) => ({
-                            ...prev,
-                            habitacao: { ...prev.habitacao, energia_eletrica: e.target.value },
-                          }))
-                        }
-                        className="mr-2"
-                      />
-                      {opcao.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Abastecimento de água</label>
-                <div className="flex flex-wrap gap-6">
-                  {[
-                    { value: "propria", label: "Própria" },
-                    { value: "compartilhada", label: "Compartilhada" },
-                    { value: "sem_medidor", label: "Sem medidor" },
-                    { value: "nao_tem", label: "Não tem" },
-                  ].map((opcao) => (
-                    <label key={opcao.value} className="flex items-center">
-                      <input
-                        type="radio"
-                        name="agua"
-                        value={opcao.value}
-                        checked={dadosFamilia.habitacao.agua === opcao.value}
-                        onChange={(e) =>
-                          setDadosFamilia((prev) => ({
-                            ...prev,
-                            habitacao: { ...prev.habitacao, agua: e.target.value },
-                          }))
-                        }
-                        className="mr-2"
-                      />
-                      {opcao.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Esgotamento sanitário</label>
-                <div className="flex flex-wrap gap-6">
-                  {[
-                    { value: "rede", label: "Rede" },
-                    { value: "fossa", label: "Fossa" },
-                    { value: "ceu_aberto", label: "Céu aberto" },
-                    { value: "nao_tem", label: "Não tem" },
-                  ].map((opcao) => (
-                    <label key={opcao.value} className="flex items-center">
-                      <input
-                        type="radio"
-                        name="esgoto"
-                        value={opcao.value}
-                        checked={dadosFamilia.habitacao.esgoto === opcao.value}
-                        onChange={(e) =>
-                          setDadosFamilia((prev) => ({
-                            ...prev,
-                            habitacao: { ...prev.habitacao, esgoto: e.target.value },
-                          }))
-                        }
-                        className="mr-2"
-                      />
-                      {opcao.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
             </CardContent>
           </Card>
         )
@@ -1754,42 +1965,56 @@ const validarEtapa = (etapa: number): boolean => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Briefcase className="h-5 w-5 mb-1 text-blue-600" />
-                Condições de Trabalho / Renda Familiar
+                Trabalho e Renda
               </CardTitle>
-              <p className="text-sm text-gray-600">Informações sobre trabalho e renda da família</p>
+              <p className="text-sm text-gray-600">Informações sobre a situação de trabalho e renda da família</p>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Quem trabalha na casa?</label>
-                <textarea
-                  placeholder="Nome, renda e local de trabalho de cada pessoa"
-                  rows={4}
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quem trabalha na família?</label>
+                <input
+                  type="text"
+                  placeholder="Nome(s) e ocupação(ões)"
                   value={dadosFamilia.trabalho_renda.quem_trabalha}
-                  onChange={(e) => setDadosFamilia((prev) => ({ ...prev, trabalho_renda: { ...prev.trabalho_renda, quem_trabalha: e.target.value } }))}
-                  onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, trabalho_renda: { ...prev.trabalho_renda, quem_trabalha: cleanExtraSpaces(e.target.value) } }))}
-                  className={getInputClass(errors.trabalho_renda?.quem_trabalha)}
+                  onChange={(e) =>
+                    setDadosFamilia((prev) => ({
+                      ...prev,
+                      trabalho_renda: { ...prev.trabalho_renda, quem_trabalha: e.target.value },
+                    }))
+                  }
+                  onBlur={(e) =>
+                    setDadosFamilia((prev) => ({
+                      ...prev,
+                      trabalho_renda: { ...prev.trabalho_renda, quem_trabalha: cleanExtraSpaces(e.target.value) },
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {renderError(errors.trabalho_renda?.quem_trabalha)}
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Rendimento familiar total</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rendimento Total da Família (mensal)
+                </label>
                 <input
                   type="number"
-                  min="0"
                   placeholder="R$ 0,00"
                   value={dadosFamilia.trabalho_renda.rendimento_total}
-                  onChange={(e) => setDadosFamilia((prev) => ({ ...prev, trabalho_renda: { ...prev.trabalho_renda, rendimento_total: Number.parseFloat(e.target.value) || 0 } }))}
+                  onChange={(e) =>
+                    setDadosFamilia((prev) => ({
+                      ...prev,
+                      trabalho_renda: { ...prev.trabalho_renda, rendimento_total: Number(e.target.value) },
+                    }))
+                  }
                   className={getInputClass(errors.trabalho_renda?.rendimento_total)}
                 />
                 {renderError(errors.trabalho_renda?.rendimento_total)}
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Observações sobre Trabalho e Renda
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
                 <textarea
-                  placeholder="Observações adicionais"
-                  rows={3}
+                  placeholder="Outras informações relevantes sobre trabalho e renda"
                   value={dadosFamilia.trabalho_renda.observacoes}
                   onChange={(e) =>
                     setDadosFamilia((prev) => ({
@@ -1797,99 +2022,14 @@ const validarEtapa = (etapa: number): boolean => {
                       trabalho_renda: { ...prev.trabalho_renda, observacoes: e.target.value },
                     }))
                   }
+                  onBlur={(e) =>
+                    setDadosFamilia((prev) => ({
+                      ...prev,
+                      trabalho_renda: { ...prev.trabalho_renda, observacoes: cleanExtraSpaces(e.target.value) },
+                    }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-              </div>
-
-              <Separator />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Programas de transferência de renda recebidos
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {programasSociais.map((programa) => (
-                    <div key={programa.id} className="space-y-2">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={dadosFamilia.programas_sociais.some((p) => p.programa_id === programa.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setDadosFamilia((prev) => ({
-                                ...prev,
-                                programas_sociais: [
-                                  ...prev.programas_sociais,
-                                  { programa_id: programa.id, valor: programa.valor_padrao },
-                                ],
-                              }))
-                            } else {
-                              setDadosFamilia((prev) => ({
-                                ...prev,
-                                programas_sociais: prev.programas_sociais.filter((p) => p.programa_id !== programa.id),
-                              }))
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <span className="text-sm">
-                          {programa.nome} ({programa.codigo})
-                        </span>
-                      </label>
-                      {dadosFamilia.programas_sociais.some((p) => p.programa_id === programa.id) && (
-                        <input
-                          type="number"
-                          placeholder="Valor recebido"
-                          value={dadosFamilia.programas_sociais.find((p) => p.programa_id === programa.id)?.valor || 0}
-                          onChange={(e) => {
-                            const valor = Number.parseFloat(e.target.value) || 0
-                            setDadosFamilia((prev) => ({
-                              ...prev,
-                              programas_sociais: prev.programas_sociais.map((p) =>
-                                p.programa_id === programa.id ? { ...p, valor } : p,
-                              ),
-                            }))
-                          }}
-                          className="ml-6 max-w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Despesas mensais</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {tiposDespesas.map((tipo) => (
-                    <div key={tipo.id}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {tipo.nome} {tipo.obrigatoria && <span className="text-red-500">*</span>}
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="R$ 0,00"
-                        value={dadosFamilia.despesas.find((d) => d.tipo_despesa_id === tipo.id)?.valor || 0}
-                        onChange={(e) => {
-                          const valor = Number.parseFloat(e.target.value) || 0
-                          setDadosFamilia((prev) => ({
-                            ...prev,
-                            despesas: prev.despesas
-                              .map((d) => (d.tipo_despesa_id === tipo.id ? { ...d, valor } : d))
-                              .concat(
-                                prev.despesas.some((d) => d.tipo_despesa_id === tipo.id)
-                                  ? []
-                                  : [{ tipo_despesa_id: tipo.id, valor }],
-                              ),
-                          }))
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  ))}
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -1903,13 +2043,13 @@ const validarEtapa = (etapa: number): boolean => {
                 <Globe className="h-5 w-5 mb-1 text-blue-600" />
                 Situação Social
               </CardTitle>
-              <p className="text-sm text-gray-600">Informações sobre participação social da família</p>
+              <p className="text-sm text-gray-600">
+                Informações sobre a participação social e acesso a serviços públicos
+              </p>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Participa de grupo/comunidade religiosa?
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Participa de alguma religião?</label>
                 <div className="flex gap-6">
                   <label className="flex items-center">
                     <input
@@ -1947,13 +2087,23 @@ const validarEtapa = (etapa: number): boolean => {
               </div>
               {dadosFamilia.situacao_social.participa_religiao && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Qual comunidade religiosa?</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Qual religião?</label>
                   <input
                     type="text"
-                    placeholder="Nome da comunidade religiosa"
+                    placeholder="Nome da religião"
                     value={dadosFamilia.situacao_social.religiao_qual}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, situacao_social: { ...prev.situacao_social, religiao_qual: e.target.value } }))}
-                    onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, situacao_social: { ...prev.situacao_social, religiao_qual: cleanExtraSpaces(e.target.value) } }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        situacao_social: { ...prev.situacao_social, religiao_qual: e.target.value },
+                      }))
+                    }
+                    onBlur={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        situacao_social: { ...prev.situacao_social, religiao_qual: cleanExtraSpaces(e.target.value) },
+                      }))
+                    }
                     className={getInputClass(errors.situacao_social?.religiao_qual)}
                   />
                   {renderError(errors.situacao_social?.religiao_qual)}
@@ -1962,9 +2112,7 @@ const validarEtapa = (etapa: number): boolean => {
               <Separator />
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Participa de ação social / grupo comunitário?
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Participa de alguma ação social?</label>
                 <div className="flex gap-6">
                   <label className="flex items-center">
                     <input
@@ -2008,13 +2156,26 @@ const validarEtapa = (etapa: number): boolean => {
               </div>
               {dadosFamilia.situacao_social.participa_acao_social && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Qual ação/grupo?</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Qual ação social?</label>
                   <input
                     type="text"
-                    placeholder="Nome da ação social ou grupo"
+                    placeholder="Nome da ação social"
                     value={dadosFamilia.situacao_social.acao_social_qual}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, situacao_social: { ...prev.situacao_social, acao_social_qual: e.target.value } }))}
-                    onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, situacao_social: { ...prev.situacao_social, acao_social_qual: cleanExtraSpaces(e.target.value) } }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        situacao_social: { ...prev.situacao_social, acao_social_qual: e.target.value },
+                      }))
+                    }
+                    onBlur={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        situacao_social: {
+                          ...prev.situacao_social,
+                          acao_social_qual: cleanExtraSpaces(e.target.value),
+                        },
+                      }))
+                    }
                     className={getInputClass(errors.situacao_social?.acao_social_qual)}
                   />
                   {renderError(errors.situacao_social?.acao_social_qual)}
@@ -2023,42 +2184,103 @@ const validarEtapa = (etapa: number): boolean => {
               <Separator />
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Acesso a serviços públicos</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {[
-                    { value: "saude", label: "Saúde" },
-                    { value: "educacao", label: "Educação" },
-                    { value: "assistencia_social", label: "Assistência Social" },
-                    { value: "cultura", label: "Cultura" },
-                    { value: "esporte", label: "Esporte" },
-                    { value: "lazer", label: "Lazer" },
-                  ].map((servico) => (
-                    <label key={servico.value} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={dadosFamilia.situacao_social.servicos_publicos.includes(servico.value)}
-                        onChange={(e) =>
-                          handleCheckboxChange("situacao_social", "servicos_publicos", servico.value, e.target.checked)
-                        }
-                        className="mr-2"
-                      />
-                      <span className="text-sm">{servico.label}</span>
-                    </label>
-                  ))}
+                <label className="block text-sm font-medium text-gray-700 mb-3">Serviços Públicos Utilizados</label>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="cras"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("cras")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "cras", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    CRAS
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="creas"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("creas")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "creas", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    CREAS
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="saude"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("saude")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "saude", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Saúde
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="educacao"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("educacao")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "educacao", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Educação
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="habitacao"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("habitacao")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "habitacao", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Habitação
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="assistencia_social"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("assistencia_social")}
+                      onChange={(e) =>
+                        handleCheckboxChange(
+                          "situacao_social",
+                          "servicos_publicos",
+                          "assistencia_social",
+                          e.target.checked,
+                        )
+                      }
+                      className="mr-2"
+                    />
+                    Assistência Social
+                  </label>
                 </div>
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Observações sobre situação social
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
                 <textarea
-                  placeholder="Observações adicionais sobre a situação social"
-                  rows={4}
+                  placeholder="Outras informações relevantes sobre a situação social da família"
                   value={dadosFamilia.situacao_social.observacoes}
                   onChange={(e) =>
                     setDadosFamilia((prev) => ({
                       ...prev,
                       situacao_social: { ...prev.situacao_social, observacoes: e.target.value },
+                    }))
+                  }
+                  onBlur={(e) =>
+                    setDadosFamilia((prev) => ({
+                      ...prev,
+                      situacao_social: { ...prev.situacao_social, observacoes: cleanExtraSpaces(e.target.value) },
                     }))
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2069,92 +2291,57 @@ const validarEtapa = (etapa: number): boolean => {
         )
 
       default:
-        return null
+        return <div>Etapa inválida</div>
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 ">
+    <div>
       <Header />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 mt-8">
-          <Button variant="default" onClick={() => window.history.back()}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar
-          </Button>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 mt-4">Novo Cadastro de Família</h1>
-          <p className="text-gray-600 mt-2">Preencha os dados da família ou indivíduo</p>
-        </div>
+      <main className="container mx-auto px-4 py-8">
+        <h1 className="text-2xl font-semibold mb-4">Cadastro de Família</h1>
 
-        {/* Indicador de Progresso */}
-        <IndicadorProgresso />
-
-        {/* Conteúdo da Etapa Atual */}
-        {renderizarEtapa()}
-
-        {/* Mensagens */}
         {message && (
           <Alert
-            className={`mt-4 ${messageType === "success" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}
+            variant={
+              messageType === "error"
+                ? "destructive"
+                : messageType === "success"
+                  ? "default"
+                  : undefined
+            }
           >
-            <div className={messageType === "success" ? "text-green-800" : "text-red-800"}>{message}</div>
+            {message}
           </Alert>
         )}
 
+        <IndicadorProgresso />
 
-        {/* Botões de Navegação */}
-        <Card className="mt-4">
-          <CardFooter className="flex justify-between items-center p-6">
-            <div className="flex gap-4">
-              <Button variant="outline" onClick={() => window.history.back()}>
-                Cancelar
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  localStorage.setItem("rascunho_familia", JSON.stringify(dadosFamilia))
-                  showMessage("Rascunho salvo com sucesso!", "success")
-                }}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Salvar Rascunho
-              </Button>
-            </div>
+        {renderizarEtapa()}
 
-            <div className="flex gap-4">
-              {etapaAtual > 0 && (
-                <Button variant="outline" onClick={etapaAnterior} className="flex items-center gap-2 bg-transparent">
-                  <ChevronLeft className="w-4 h-4" />
-                  Anterior
-                </Button>
-              )}
-
-              {etapaAtual < ETAPAS.length - 1 ? (
-                <Button onClick={proximaEtapa} className="flex items-center gap-2">
-                  Próximo
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              ) : (
-                <Button onClick={salvarFamilia} disabled={loading} className="flex items-center gap-2">
-                  {loading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="w-4 h-4" />
-                      Salvar e Finalizar
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          </CardFooter>
-        </Card>
-      </div>
+        <div className="mt-6 flex justify-between">
+          <Button
+            onClick={etapaAnterior}
+            disabled={etapaAtual === 0}
+            variant="outline"
+            className="flex items-center gap-2 bg-transparent"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Anterior
+          </Button>
+          {etapaAtual === ETAPAS.length - 1 ? (
+            <Button onClick={salvarFamilia} disabled={loading} className="flex items-center gap-2">
+              <Save className="w-4 h-4" />
+              {loading ? "Salvando..." : "Salvar Família"}
+            </Button>
+          ) : (
+            <Button onClick={proximaEtapa} className="flex items-center gap-2">
+              Próxima Etapa
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
+      </main>
     </div>
   )
 }
