@@ -834,20 +834,21 @@ const validarEtapa = (etapa: number): boolean => {
                     />
                     {renderError(errors.responsavel?.telefone)}
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Telefone para Recado</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Telefone de Recado</label>
                     <input
                       type="text"
                       placeholder="(00) 00000-0000"
+                      maxLength={15}
                       value={dadosFamilia.responsavel.telefone_recado}
+                      // APLIQUE A FORMATAÇÃO AQUI
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
                           ...prev,
-                          responsavel: { ...prev.responsavel, telefone_recado: e.target.value },
+                          responsavel: { ...prev.responsavel, telefone_recado: formatPhone(e.target.value) },
                         }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={getInputClass(undefined)} // Não há validação obrigatória, então não precisa de erro
                     />
                   </div>
                   <div>

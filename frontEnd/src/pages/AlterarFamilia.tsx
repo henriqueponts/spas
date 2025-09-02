@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import {
   ArrowLeft,
@@ -23,7 +23,10 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../compone
 import { Alert } from "../components/ui/Alert"
 import { Separator } from "../components/ui/Separator"
 import api from "../services/api"
-
+import {
+  formatCPF, formatPhone, formatCEP, formatNumericOnly, formatUF, formatToUpper, cleanExtraSpaces,
+  isValidCPF, isValidNIS, isDateInPast, isValidEmail, isValidTituloEleitor, isValidName, isMeaningfulText,
+} from "../utils/formUtils"
 // Tipos baseados na estrutura do banco
 interface Equipamento {
   id: number
@@ -136,6 +139,14 @@ interface DadosFamilia {
   }
 }
 
+type FormErrors = {
+  profissional_id?: string;
+  responsavel?: Partial<Record<keyof IntegranteFamiliar, string>>;
+  endereco?: Partial<Record<keyof DadosFamilia['endereco'], string>>;
+  integrantes?: Array<Partial<Record<keyof IntegranteFamiliar, string>> | null>;
+  // Adicione outros se precisar validar mais a fundo
+};
+
 // Definição das etapas
 const ETAPAS = [
   { id: "identificacao", nome: "Identificação", icone: User },
@@ -159,6 +170,9 @@ const AlterarFamilia: React.FC = () => {
   const [tiposDespesas, setTiposDespesas] = useState<TipoDespesa[]>([])
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState<"success" | "error" | "">("")
+  
+  // NOVO: Estado de erros tipado
+  const [errors, setErrors] = useState<FormErrors>({})
 
   // Estado principal do formulário
   const [dadosFamilia, setDadosFamilia] = useState<DadosFamilia>({
@@ -249,7 +263,9 @@ const AlterarFamilia: React.FC = () => {
     }
   }, [id, navigate])
 
-  const carregarDados = async () => {
+  // NOVO: Função de carregamento envolvida em useCallback
+  const carregarDados = useCallback(async () => {
+    if (!id) return;
     try {
       setLoadingData(true)
       console.log("📋 Iniciando carregamento de dados...")
@@ -272,7 +288,7 @@ const AlterarFamilia: React.FC = () => {
       setProgramasSociais(loadedProgramas)
       setTiposDespesas(loadedDespesas)
 
-      // Carregar dados da família
+      // Carregar dados da família (APENAS UMA VEZ)
       console.log("👨‍👩‍👧‍👦 Carregando dados da família ID:", id)
       const familiaRes = await api.get(`/auth/familias/${id}`)
       const familiaData = familiaRes.data
@@ -280,6 +296,7 @@ const AlterarFamilia: React.FC = () => {
       console.log("📋 Dados da família carregados:", familiaData)
 
       // Converter dados da API para o formato do formulário
+      // A sua lógica de conversão aqui está perfeita e pode ser mantida como está.
       const dadosConvertidos: DadosFamilia = {
         id: familiaData.id,
         data_atendimento: familiaData.data_atendimento
@@ -402,7 +419,16 @@ const AlterarFamilia: React.FC = () => {
     } finally {
       setLoadingData(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    if (id) {
+      carregarDados()
+    } else {
+      showMessage("ID da família não encontrado na URL", "error")
+      navigate("/familias")
+    }
+  }, [id, navigate, carregarDados])
 
   const showMessage = (msg: string, type: "success" | "error") => {
     setMessage(msg)
@@ -413,52 +439,114 @@ const AlterarFamilia: React.FC = () => {
     }, 5000)
   }
 
-  // Validações por etapa
   const validarEtapa = (etapa: number): boolean => {
+    const newErrors: FormErrors = {}
+    const { responsavel, endereco, integrantes } = dadosFamilia
+
     switch (etapa) {
-      case 0: // Identificação
-        return !!(
-          dadosFamilia.responsavel.nome_completo &&
-          dadosFamilia.endereco.logradouro &&
-          dadosFamilia.endereco.bairro &&
-          dadosFamilia.profissional_id > 0
-        )
-      case 1: // Família
-        return true // Opcional
-      case 2: // Saúde
-        return true // Opcional
-      case 3: // Habitação
-        return true // Opcional
-      case 4: // Renda
-        return true // Opcional
-      case 5: // Social
-        return true // Opcional
-      default:
-        return false
+      case 0: {
+        if (!dadosFamilia.profissional_id || dadosFamilia.profissional_id === 0) {
+          newErrors.profissional_id = "Selecione o profissional responsável."
+        }
+        if (!responsavel.nome_completo.trim()) {
+          newErrors.responsavel = { ...newErrors.responsavel, nome_completo: "Nome completo é obrigatório." }
+        } else if (!isValidName(responsavel.nome_completo, true)) {
+          newErrors.responsavel = { ...newErrors.responsavel, nome_completo: "Por favor, insira um nome e sobrenome válidos." }
+        }
+        if (!responsavel.data_nascimento) {
+          newErrors.responsavel = { ...newErrors.responsavel, data_nascimento: "Data de nascimento é obrigatória." }
+        } else if (!isDateInPast(responsavel.data_nascimento)) {
+          newErrors.responsavel = { ...newErrors.responsavel, data_nascimento: "Data de nascimento não pode ser no futuro." }
+        }
+        if (!responsavel.cpf) {
+          newErrors.responsavel = { ...newErrors.responsavel, cpf: "CPF é obrigatório." }
+        } else if (!isValidCPF(responsavel.cpf)) {
+          newErrors.responsavel = { ...newErrors.responsavel, cpf: "CPF inválido." }
+        }
+        if (!endereco.logradouro.trim()) {
+          newErrors.endereco = { ...newErrors.endereco, logradouro: "Logradouro é obrigatório." }
+        }
+        if (!endereco.bairro.trim()) {
+          newErrors.endereco = { ...newErrors.endereco, bairro: "Bairro é obrigatório." }
+        }
+               if (responsavel.nis && !isValidNIS(responsavel.nis)) {
+          if(!newErrors.responsavel) newErrors.responsavel = {};
+          newErrors.responsavel.nis = "NIS inválido.";
+        }
+        if (responsavel.email && !isValidEmail(responsavel.email)) {
+          if(!newErrors.responsavel) newErrors.responsavel = {};
+          newErrors.responsavel.email = "E-mail inválido.";
+        }
+        if (responsavel.titulo_eleitor && !isValidTituloEleitor(responsavel.titulo_eleitor)) {
+          if(!newErrors.responsavel) newErrors.responsavel = {};
+          newErrors.responsavel.titulo_eleitor = "Título de Eleitor inválido.";
+        }
+
+        if (!endereco.logradouro.trim()) {
+          if(!newErrors.endereco) newErrors.endereco = {};
+          newErrors.endereco.logradouro = "Logradouro é obrigatório."
+        } else if (!isMeaningfulText(endereco.logradouro)) { // ADICIONADO
+          if(!newErrors.endereco) newErrors.endereco = {};
+          newErrors.endereco.logradouro = "Logradouro inválido."
+        }
+
+        if (!endereco.bairro.trim()) {
+          if(!newErrors.endereco) newErrors.endereco = {};
+          newErrors.endereco.bairro = "Bairro é obrigatório."
+        } else if (!isMeaningfulText(endereco.bairro)) { // ADICIONADO
+          if(!newErrors.endereco) newErrors.endereco = {};
+          newErrors.endereco.bairro = "Bairro inválido."
+        }
+        break
+      }
+      case 1: {
+        const integrantesErrors: Array<Partial<Record<keyof IntegranteFamiliar, string>> | null> = []
+        integrantes.forEach((integrante, index) => {
+          const integranteError: Partial<Record<keyof IntegranteFamiliar, string>> = {}
+          if (!integrante.nome_completo.trim()) {
+            integranteError.nome_completo = "Nome é obrigatório."
+          }
+          if (!integrante.data_nascimento) {
+            integranteError.data_nascimento = "Data de nascimento é obrigatória."
+          }
+          if (!integrante.cpf) {
+            integranteError.cpf = "CPF é obrigatório."
+          } else if (!isValidCPF(integrante.cpf)) {
+            integranteError.cpf = "CPF inválido."
+          }
+          if (Object.keys(integranteError).length > 0) {
+            integrantesErrors[index] = integranteError
+          } else {
+            integrantesErrors[index] = null
+          }
+        })
+        if (integrantesErrors.some(e => e !== null)) {
+          newErrors.integrantes = integrantesErrors
+        }
+        break
+      }
     }
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
   const proximaEtapa = () => {
     if (validarEtapa(etapaAtual)) {
-      // Marcar etapa atual como completa
-      const novasEtapasCompletas = [...etapasCompletas]
-      novasEtapasCompletas[etapaAtual] = true
-      setEtapasCompletas(novasEtapasCompletas)
-
+      setErrors({})
       if (etapaAtual < ETAPAS.length - 1) {
         setEtapaAtual(etapaAtual + 1)
       }
     } else {
-      showMessage("Por favor, preencha os campos obrigatórios antes de continuar", "error")
+      showMessage("Por favor, corrija os erros indicados antes de continuar", "error")
     }
   }
 
   const etapaAnterior = () => {
+    setErrors({})
     if (etapaAtual > 0) {
       setEtapaAtual(etapaAtual - 1)
     }
   }
-
   const adicionarIntegrante = () => {
     const novoIntegrante: IntegranteFamiliar = {
       nome_completo: "",
@@ -527,24 +615,19 @@ const AlterarFamilia: React.FC = () => {
     })
   }
 
-  const validarFormulario = (): boolean => {
-    if (!dadosFamilia.responsavel.nome_completo) {
-      showMessage("Nome do responsável é obrigatório", "error")
-      return false
-    }
-    if (!dadosFamilia.endereco.logradouro || !dadosFamilia.endereco.bairro) {
-      showMessage("Endereço completo é obrigatório", "error")
-      return false
-    }
-    if (dadosFamilia.profissional_id === 0) {
-      showMessage("Selecione o profissional responsável", "error")
-      return false
+const validarFormularioCompleto = (): boolean => {
+    for (let i = 0; i < ETAPAS.length; i++) {
+      if (!validarEtapa(i)) {
+        setEtapaAtual(i)
+        showMessage("Existem erros no formulário. Por favor, revise os campos destacados.", "error")
+        return false
+      }
     }
     return true
   }
 
   const salvarAlteracoes = async () => {
-    if (!validarFormulario()) return
+    if (!validarFormularioCompleto()) return
 
     setLoading(true)
     try {
@@ -631,6 +714,15 @@ const AlterarFamilia: React.FC = () => {
   )
 
   const renderizarEtapa = () => {
+        // Funções auxiliares para renderizar erros
+    const getInputClass = (fieldError: string | undefined) =>
+      `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        fieldError ? 'border-red-500' : 'border-gray-300'
+      }`
+
+    const renderError = (fieldError: string | undefined) =>
+      fieldError && <p className="text-red-600 text-sm mt-1">{fieldError}</p>
+
     switch (etapaAtual) {
       case 0: // Identificação
         return (
@@ -658,18 +750,15 @@ const AlterarFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Profissional Responsável *</label>
                   <select
                     value={dadosFamilia.profissional_id}
-                    onChange={(e) =>
-                      setDadosFamilia((prev) => ({ ...prev, profissional_id: Number.parseInt(e.target.value) }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, profissional_id: Number.parseInt(e.target.value) }))}
+                    className={getInputClass(errors.profissional_id)}
                   >
                     <option value={0}>Selecione o profissional</option>
                     {usuarios.map((usuario) => (
-                      <option key={usuario.id} value={usuario.id}>
-                        {usuario.nome}
-                      </option>
+                      <option key={usuario.id} value={usuario.id}>{usuario.nome}</option>
                     ))}
                   </select>
+                  {renderError(errors.profissional_id)}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Equipamento</label>
@@ -695,99 +784,69 @@ const AlterarFamilia: React.FC = () => {
               {/* Dados do Responsável */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-gray-900">Dados do Responsável Familiar</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
-                    <input
-                      type="text"
-                      placeholder="Nome completo do responsável"
-                      value={dadosFamilia.responsavel.nome_completo}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, nome_completo: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento</label>
-                    <input
-                      type="date"
-                      value={dadosFamilia.responsavel.data_nascimento}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, data_nascimento: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Sexo</label>
-                    <select
-                      value={dadosFamilia.responsavel.sexo}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: {
-                            ...prev.responsavel,
-                            sexo: e.target.value as "feminino" | "masculino" | "outro",
-                          },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="feminino">Feminino</option>
-                      <option value="masculino">Masculino</option>
-                      <option value="outro">Outro</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">CPF</label>
-                    <input
-                      type="text"
-                      placeholder="000.000.000-00"
-                      value={dadosFamilia.responsavel.cpf}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, cpf: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">RG</label>
-                    <input
-                      type="text"
-                      placeholder="00.000.000-0"
-                      value={dadosFamilia.responsavel.rg}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, rg: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Linha 1 */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
+                      <input
+                        type="text"
+                        value={dadosFamilia.responsavel.nome_completo}
+                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nome_completo: e.target.value } }))}
+                        onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nome_completo: cleanExtraSpaces(e.target.value) } }))}
+                        className={getInputClass(errors.responsavel?.nome_completo)}
+                      />
+                      {renderError(errors.responsavel?.nome_completo)}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento *</label>
+                      <input
+                        type="date"
+                        value={dadosFamilia.responsavel.data_nascimento}
+                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, data_nascimento: e.target.value } }))}
+                        className={getInputClass(errors.responsavel?.data_nascimento)}
+                      />
+                      {renderError(errors.responsavel?.data_nascimento)}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Sexo</label>
+                      <select
+                          value={dadosFamilia.responsavel.sexo}
+                          onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, sexo: e.target.value as "feminino" | "masculino" | "outro" } }))}
+                          className={getInputClass(undefined)}
+                        >                        
+                        <option value="feminino">Feminino</option>
+                        <option value="masculino">Masculino</option>
+                        <option value="outro">Outro</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
+                      <input
+                        type="text"
+                        maxLength={14}
+                        value={dadosFamilia.responsavel.cpf}
+                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, cpf: formatCPF(e.target.value) } }))}
+                        className={getInputClass(errors.responsavel?.cpf)}
+                      />
+                      {renderError(errors.responsavel?.cpf)}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">RG</label>
+                      <input
+                        type="text"
+                        value={dadosFamilia.responsavel.rg}
+                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, rg: formatNumericOnly(e.target.value) } }))}
+                        className={getInputClass(undefined)}
+                      />
+                    </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Órgão Expedidor</label>
                     <input
                       type="text"
                       placeholder="SSP/SP"
                       value={dadosFamilia.responsavel.orgao_expedidor}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, orgao_expedidor: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, orgao_expedidor: formatToUpper(e.target.value) } }))}
+                      className={getInputClass(undefined)}
                     />
                   </div>
                   <div>
@@ -829,62 +888,51 @@ const AlterarFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
                     <input
                       type="text"
-                      placeholder="(00) 00000-0000"
+                      maxLength={15}
                       value={dadosFamilia.responsavel.telefone}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, telefone: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, telefone: formatPhone(e.target.value) } }))}
+                      className={getInputClass(undefined)}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Telefone para Recado</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Telefone de Recado</label>
                     <input
                       type="text"
                       placeholder="(00) 00000-0000"
+                      maxLength={15}
                       value={dadosFamilia.responsavel.telefone_recado}
+                      // APLIQUE A FORMATAÇÃO AQUI
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
                           ...prev,
-                          responsavel: { ...prev.responsavel, telefone_recado: e.target.value },
+                          responsavel: { ...prev.responsavel, telefone_recado: formatPhone(e.target.value) },
                         }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={getInputClass(undefined)} // Não há validação obrigatória, então não precisa de erro
                     />
                   </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                      <input
+                        type="email"
+                        value={dadosFamilia.responsavel.email}
+                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, email: e.target.value } }))}
+                        className={getInputClass(errors.responsavel?.email)}
+                      />
+                      {renderError(errors.responsavel?.email)}
+                    </div>
+                  </div>                    
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                    <input
-                      type="email"
-                      placeholder="email@exemplo.com"
-                      value={dadosFamilia.responsavel.email}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, email: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">NIS</label>
-                    <input
-                      type="text"
-                      placeholder="Número do NIS"
-                      value={dadosFamilia.responsavel.nis}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, nis: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">NIS</label>
+                      <input
+                        type="text"
+                        maxLength={11}
+                        value={dadosFamilia.responsavel.nis}
+                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nis: formatNumericOnly(e.target.value) } }))}
+                        className={getInputClass(errors.responsavel?.nis)}
+                      />
+                      {renderError(errors.responsavel?.nis)}
+                    </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Título de Eleitor</label>
                     <input
@@ -975,35 +1023,26 @@ const AlterarFamilia: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900">Endereço</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Logradouro *</label>
-                    <input
-                      type="text"
-                      placeholder="Rua, Avenida, etc."
-                      value={dadosFamilia.endereco.logradouro}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          endereco: { ...prev.endereco, logradouro: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Número</label>
-                    <input
-                      type="text"
-                      placeholder="Número"
-                      value={dadosFamilia.endereco.numero}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          endereco: { ...prev.endereco, numero: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Logradouro *</label>
+                  <input
+                    type="text"
+                    value={dadosFamilia.endereco.logradouro}
+                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, logradouro: e.target.value } }))}
+                    onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, logradouro: cleanExtraSpaces(e.target.value) } }))}
+                    className={getInputClass(errors.endereco?.logradouro)}
+                  />
+                  {renderError(errors.endereco?.logradouro)}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Número</label>
+                  <input
+                    type="text"
+                    value={dadosFamilia.endereco.numero}
+                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, numero: e.target.value } }))}
+                    className={getInputClass(undefined)}
+                  />
+                </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Complemento</label>
                     <input
@@ -1023,17 +1062,13 @@ const AlterarFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Bairro *</label>
                     <input
                       type="text"
-                      placeholder="Bairro"
                       value={dadosFamilia.endereco.bairro}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          endereco: { ...prev.endereco, bairro: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: e.target.value } }))}
+                      onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: cleanExtraSpaces(e.target.value) } }))}
+                      className={getInputClass(errors.endereco?.bairro)}
                     />
-                  </div>
+                    {renderError(errors.endereco?.bairro)}
+                  </div>                 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
                     <input
@@ -1053,31 +1088,20 @@ const AlterarFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">UF</label>
                     <input
                       type="text"
-                      placeholder="SP"
                       maxLength={2}
                       value={dadosFamilia.endereco.uf}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          endereco: { ...prev.endereco, uf: e.target.value.toUpperCase() },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, uf: formatUF(e.target.value) } }))}
+                      className={getInputClass(undefined)}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
                     <input
                       type="text"
-                      placeholder="00000-000"
+                      maxLength={9}
                       value={dadosFamilia.endereco.cep}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          endereco: { ...prev.endereco, cep: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, cep: formatCEP(e.target.value) } }))}
+                      className={getInputClass(undefined)}
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -1134,7 +1158,7 @@ const AlterarFamilia: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               {dadosFamilia.integrantes.map((integrante, index) => (
-                <Card key={index} className="border border-gray-200">
+                <Card key={integrante.id || index} className="border border-gray-200">
                   <CardHeader className="flex flex-row items-center justify-between pb-3">
                     <h4 className="font-medium text-gray-900">Integrante {index + 1}</h4>
                     <Button
@@ -1149,65 +1173,66 @@ const AlterarFamilia: React.FC = () => {
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
                         <input
                           type="text"
-                          placeholder="Nome completo"
                           value={integrante.nome_completo}
                           onChange={(e) => atualizarIntegrante(index, "nome_completo", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          onBlur={(e) => atualizarIntegrante(index, "nome_completo", cleanExtraSpaces(e.target.value))}
+                          className={getInputClass(errors.integrantes?.[index]?.nome_completo)}
                         />
+                        {renderError(errors.integrantes?.[index]?.nome_completo)}
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento</label>
-                        <input
-                          type="date"
-                          value={integrante.data_nascimento}
-                          onChange={(e) => atualizarIntegrante(index, "data_nascimento", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Parentesco</label>
-                        <select
-                          value={integrante.tipo_membro}
-                          onChange={(e) => atualizarIntegrante(index, "tipo_membro", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="conjuge">Cônjuge</option>
-                          <option value="filho">Filho(a)</option>
-                          <option value="pai">Pai</option>
-                          <option value="mae">Mãe</option>
-                          <option value="irmao">Irmão/Irmã</option>
-                          <option value="avo">Avô/Avó</option>
-                          <option value="neto">Neto(a)</option>
-                          <option value="outro">Outro</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Sexo</label>
-                        <select
-                          value={integrante.sexo}
-                          onChange={(e) =>
-                            atualizarIntegrante(index, "sexo", e.target.value as "feminino" | "masculino" | "outro")
-                          }
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="feminino">Feminino</option>
-                          <option value="masculino">Masculino</option>
-                          <option value="outro">Outro</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">CPF</label>
-                        <input
-                          type="text"
-                          placeholder="000.000.000-00"
-                          value={integrante.cpf}
-                          onChange={(e) => atualizarIntegrante(index, "cpf", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento *</label>
+                          <input
+                            type="date"
+                            value={integrante.data_nascimento}
+                            onChange={(e) => atualizarIntegrante(index, "data_nascimento", e.target.value)}
+                            className={getInputClass(errors.integrantes?.[index]?.data_nascimento)}
+                          />
+                          {renderError(errors.integrantes?.[index]?.data_nascimento)}
+                        </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Parentesco</label>
+                            <select
+                              value={integrante.tipo_membro}
+                              onChange={(e) => atualizarIntegrante(index, "tipo_membro", e.target.value)}
+                              className={getInputClass(undefined)}
+                            >
+                              <option value="conjuge">Cônjuge</option>
+                              <option value="filho">Filho(a)</option>
+                              <option value="pai">Pai</option>
+                              <option value="mae">Mãe</option>
+                              <option value="irmao">Irmão/Irmã</option>
+                              <option value="avo">Avô/Avó</option>
+                              <option value="neto">Neto(a)</option>
+                              <option value="outro">Outro</option>
+                            </select>
+                          </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Sexo</label>
+                              <select
+                                value={integrante.sexo}
+                                onChange={(e) => atualizarIntegrante(index, "sexo", e.target.value as "feminino" | "masculino" | "outro")}
+                                className={getInputClass(undefined)}
+                              >
+                                <option value="feminino">Feminino</option>
+                                <option value="masculino">Masculino</option>
+                                <option value="outro">Outro</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
+                              <input
+                                type="text"
+                                maxLength={14}
+                                value={integrante.cpf}
+                                onChange={(e) => atualizarIntegrante(index, "cpf", formatCPF(e.target.value))}
+                                className={getInputClass(errors.integrantes?.[index]?.cpf)}
+                              />
+                              {renderError(errors.integrantes?.[index]?.cpf)}
+                            </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">NIS</label>
                         <input
