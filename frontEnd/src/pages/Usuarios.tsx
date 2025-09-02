@@ -4,7 +4,21 @@ import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import Header from "../components/Header"
 import api from "../services/api"
-import { UserPlus, Search, Filter, UserX, UserCheck, BadgeIcon as IdCard, MapPin, Calendar, Eye, EyeOff, Loader2, LockKeyhole, X } from 'lucide-react'
+import {
+  UserPlus,
+  Search,
+  Filter,
+  UserX,
+  UserCheck,
+  Award as IdCard,
+  MapPin,
+  Calendar,
+  Eye,
+  EyeOff,
+  Loader2,
+  LockKeyhole,
+  X,
+} from "lucide-react"
 import { useNavigate } from "react-router-dom"
 
 // Interfaces (mantidas como estão)
@@ -89,6 +103,11 @@ const Usuarios: React.FC = () => {
 
   // Função para alterar status do usuário
   const alternarStatusUsuario = async (usuarioId: string) => {
+    if (String(user?.id) === usuarioId && usuarios.find((u) => u.id === usuarioId)?.ativo) {
+      alert("Você não pode inativar seu próprio usuário!")
+      return
+    }
+
     try {
       await api.put(`/auth/usuarios/${usuarioId}/status`)
       setUsuarios(usuarios.map((u) => (u.id === usuarioId ? { ...u, ativo: !u.ativo } : u)))
@@ -119,7 +138,17 @@ const Usuarios: React.FC = () => {
       alert("Senha alterada com sucesso!")
     } catch (error: unknown) {
       console.error("Erro ao trocar senha:", error)
-      if (error && typeof error === "object" && "response" in error && error.response && typeof error.response === "object" && "data" in error.response.data && typeof error.response.data === "object" && "message" in error.response.data) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response &&
+        typeof error.response === "object" &&
+        "data" in error.response &&
+        error.response.data &&
+        typeof error.response.data === "object" &&
+        "message" in error.response.data
+      ) {
         alert(error.response.data.message)
       } else {
         alert("Erro ao alterar senha")
@@ -314,10 +343,13 @@ const Usuarios: React.FC = () => {
                     </button>
                     <button
                       onClick={() => alternarStatusUsuario(usuario.id)}
+                      disabled={String(user?.id) === usuario.id && usuario.ativo}
                       className={`flex items-center space-x-1 px-3 py-2 text-sm rounded-lg transition-colors border ${
-                        usuario.ativo
-                          ? "bg-red-50 text-red-700 hover:bg-red-100 border-red-200 hover:border-red-300"
-                          : "bg-green-50 text-green-700 hover:bg-green-100 border-green-200 hover:border-green-300"
+                        String(user?.id) === String(usuario.id) && usuario.ativo
+                          ? "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed"
+                          : usuario.ativo
+                            ? "bg-red-50 text-red-700 hover:bg-red-100 border-red-200 hover:border-red-300"
+                            : "bg-green-50 text-green-700 hover:bg-green-100 border-green-200 hover:border-green-300"
                       }`}
                     >
                       {usuario.ativo ? <UserX size={16} /> : <UserCheck size={16} />}
