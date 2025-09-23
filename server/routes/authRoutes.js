@@ -101,7 +101,7 @@
                 return res.status(401).json({ message: 'Token não fornecido' });
             }
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            req.userId = decoded.id;
+            req.userId = decoded.id;a
             next()
         } catch (err) {
             return res.status(500).json({ message: 'server error' })
@@ -534,71 +534,66 @@
             res.status(500).json({ message: 'Erro ao verificar tabelas' });
         }
     });
-    // teste Beneficios
 
     // Rota de busca Familia (específica)
 router.get('/familias/buscar', async (req, res) => {
-    const { tipo, termo } = req.query;
-
-    if (!tipo || !termo) {
-        return res.status(400).json({ message: 'Tipo e termo de busca são obrigatórios' });
-    }
-
     try {
         const db = await connectToDatabase();
-        let query = '';
-        let params = [];
-
-        // AJUSTE 1: Query base que agora busca o nome real do equipamento com LEFT JOIN
-        const baseQuery = `
-            SELECT 
+        const { tipo, termo } = req.query; 
+        let sqlQuery = `
+            SELECT DISTINCT
                 f.id,
-                f.prontuario,
-                p.nome_completo as responsavel_nome,
-                p.cpf as responsavel_cpf,
-                e.nome as equipamento_nome 
+                p_resp.nome_completo AS responsavel_nome,
+                p_resp.cpf AS responsavel_cpf,
+                f.prontuario
             FROM familias f
-            INNER JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
-            LEFT JOIN equipamento e ON f.equipamento_id = e.id
+            LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
+            LEFT JOIN pessoas p_membro ON f.id = p_membro.familia_id
+            WHERE 1=1
         `;
+        const params = [];
 
-        switch (tipo) {
-            case 'nome':
-                query = `${baseQuery} WHERE p.nome_completo LIKE ? LIMIT 10`;
-                params = [`%${termo}%`];
-                break;
-              case 'cpf':
-                const cpfLimpo = String(termo).replace(/\D/g, '');
-                // MUDANÇA PRINCIPAL AQUI:
-                // Usamos a função REPLACE() do MySQL para remover '.' e '-' da coluna `p.cpf` antes de comparar.
-                query = `${baseQuery} WHERE REPLACE(REPLACE(p.cpf, '.', ''), '-', '') = ? LIMIT 10`;
-                params = [cpfLimpo];
-                break;
-            case 'prontuario':
-                query = `${baseQuery} WHERE f.prontuario = ? LIMIT 10`;
-                params = [termo];
-                break;
-            // AJUSTE 2: Adicionada a busca por NIS que estava faltando
-            case 'nis':
-                const nisLimpo = String(termo).replace(/\D/g, '');
-                query = `${baseQuery} WHERE p.nis = ? LIMIT 10`;
-                params = [nisLimpo];
-                break;
-            default:
-                return res.status(400).json({ message: 'Tipo de busca inválido' });
+        if (!termo) {
+            return res.status(400).json({ message: 'Termo de busca não fornecido.' });
         }
 
-        const [results] = await db.query(query, params);
-        res.json(results);
+        const likeTerm = `%${termo}%`;
+        switch (tipo) {
+            case 'nome': // Busca por nome do responsável
+                sqlQuery += ` AND p_resp.nome_completo LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'cpf': // Busca por CPF do responsável
+                sqlQuery += ` AND p_resp.cpf LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'prontuario': // Busca por prontuário da família
+                sqlQuery += ` AND f.prontuario LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'membro_nome': // Nova busca por nome de membro da família
+                sqlQuery += ` AND p_membro.nome_completo LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'membro_cpf': // Nova busca por CPF de membro da família
+                sqlQuery += ` AND p_membro.cpf LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'membro_nis': // Nova busca por NIS de membro da família
+                sqlQuery += ` AND p_membro.nis LIKE ?`;
+                params.push(likeTerm);
+                break;
+            default:
+                return res.status(400).json({ message: 'Tipo de busca inválido.' });
+        }
 
+        const [results] = await db.query(sqlQuery, params);
+        res.json(results);
     } catch (error) {
         console.error('Erro na busca de famílias:', error);
-        res.status(500).json({ message: 'Erro ao buscar famílias', error: error.message });
+        res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
     }
 });
-
-
-    // final teste Beneficios
 
     router.get('/familias/:id', verifyToken, async (req, res) => {
         console.log('🔍 INICIANDO busca da família ID:', req.params.id);
@@ -861,52 +856,53 @@ router.get('/familias/buscar', async (req, res) => {
         }
     });
 
-    // Rota para CADASTRAR BENEFÍCIOS (SEM TOKEN e com validação de duplicidade no mês)
-router.post('/beneficios', async (req, res) => { // 'verifyToken' foi removido daqui
+    // Rota para cadastrar beneficios 
+router.post('/beneficios', async (req, res) => {
     let transacao;
     try {
         const db = await connectToDatabase();
         transacao = await db.getConnection();
         await transacao.beginTransaction();
-
         const {
             familia_id, tipo_beneficio, descricao_beneficio, data_concessao,
             valor, justificativa, data_entrega, observacoes,
-            force // Flag para forçar o cadastro
+            force
         } = req.body;
-        
-        // IMPORTANTE: Como não há token, definimos um ID de responsável fixo para o teste.
-        // Certifique-se de que este ID existe na sua tabela `usuarios`.
-        const responsavel_id = 1; // <-- COLOQUE UM ID DE USUÁRIO VÁLIDO AQUI!
 
-        // --- Validações Iniciais ---
+        const responsavel_id = 1; 
+        // Campos obrigatorios
         if (!familia_id || !tipo_beneficio || !justificativa) {
             await transacao.release();
             return res.status(400).json({ message: 'Campos obrigatórios não preenchidos.' });
         }
 
-        // --- VALIDAÇÃO DE DUPLICIDADE NO MÊS ---
+        // Validação de Duplicidade no mês (por família)
         if (!force) {
-            const [existente] = await transacao.query(
-                `SELECT id FROM beneficios WHERE 
-                    familia_id = ? AND 
-                    MONTH(data_concessao) = MONTH(CURDATE()) AND 
-                    YEAR(data_concessao) = YEAR(CURDATE())`,
+            const [existingBenefits] = await transacao.query(
+                `SELECT b.id, b.tipo_beneficio, p_resp.nome_completo AS responsavel_familia_nome
+                 FROM beneficios b
+                 LEFT JOIN familias f ON b.familia_id = f.id
+                 LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
+                 WHERE
+                     b.familia_id = ? AND
+                     MONTH(b.data_concessao) = MONTH(CURDATE()) AND
+                     YEAR(b.data_concessao) = YEAR(CURDATE())
+                 LIMIT 1`,
                 [familia_id]
             );
 
-            if (existente.length > 0) {
+            if (existingBenefits.length > 0) {
                 await transacao.release();
+                const { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente } = existingBenefits[0];
                 return res.status(409).json({
-                    message: 'Esta família já recebeu um benefício este mês.',
-                    requiresConfirmation: true
+                    message: `ATENÇÃO: A família de ${responsavel_familia_nome || 'um responsável'} já recebeu um benefício do tipo "${tipoBeneficioExistente}" este mês. Deseja registrar a entrega mesmo assim?`,
+                    requiresConfirmation: true,
+                    existingBenefit: { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente } 
                 });
             }
         }
-        
-        const dataEntregaFinal = data_entrega ? data_entrega : null;
 
-        // --- Lógica de Inserção ---
+        const dataEntregaFinal = data_entrega ? data_entrega : null;
         const sqlQuery = `
             INSERT INTO beneficios (
                 familia_id, tipo_beneficio, descricao_beneficio, data_concessao, valor,
@@ -921,26 +917,26 @@ router.post('/beneficios', async (req, res) => { // 'verifyToken' foi removido d
 
         const [result] = await transacao.query(sqlQuery, params);
         await transacao.commit();
-        
         const beneficio_id = result.insertId;
+
         const [beneficioInserido] = await transacao.query(`
-            SELECT b.*, p.nome_completo as responsavel_nome, f.prontuario
+            SELECT b.*, u.nome as responsavel_id, f.prontuario, p.nome_completo as responsavel_nome
             FROM beneficios b
             LEFT JOIN familias f ON b.familia_id = f.id
-            LEFT JOIN pessoas p ON p.familia_id = f.id AND p.tipo_membro = 'responsavel'
+            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+            LEFT JOIN usuarios u ON b.responsavel_id = u.id
             WHERE b.id = ?
         `, [beneficio_id]);
-        
+
         await transacao.release();
         return res.status(201).json(beneficioInserido[0]);
-
     } catch (err) {
         if (transacao) {
             await transacao.rollback();
             await transacao.release();
         }
-        console.error("Erro ao registrar benefício (modo de teste):", err); 
-        return res.status(500).json({ message: 'server error' });
+        console.error("Erro ao registrar benefício:", err);
+        return res.status(500).json({ message: err.sqlMessage || err.message || 'Erro interno do servidor' });
     }
 });
 
@@ -949,7 +945,6 @@ router.get('/beneficios/historico', async (req, res) => {
     try {
         const db = await connectToDatabase();
         
-        // Usando a query completa que busca os dados reais da família e do responsável.
         const [results] = await db.query(`
             SELECT
                 b.id, b.familia_id, b.tipo_beneficio, b.descricao_beneficio,
@@ -995,7 +990,7 @@ router.get('/beneficios/historico', async (req, res) => {
                     b.created_at,
                     COALESCE(p.nome_completo, 'Nome não encontrado') as responsavel_nome,
                     COALESCE(f.prontuario, 'Prontuário não encontrado') as prontuario,
-                    COALESCE(u.nome, 'Usuário não encontrado') as responsavel_concessao
+                    COALESCE(u.nome, 'Usuário não encontrado') as responsavel_id
                 FROM beneficios b
                 LEFT JOIN familias f ON b.familia_id = f.id
                 LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
@@ -1016,25 +1011,23 @@ router.get('/beneficios/historico', async (req, res) => {
         }
     });
     
-// Rota para MARCAR BENEFÍCIO COMO ENTREGUE.
+// Rota para Marcar Beneficio como entregue
 router.put('/beneficios/:id/entregar', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Validação do ID
+
         if (!id || isNaN(parseInt(id)) || parseInt(id) <= 0) {
             return res.status(400).json({ message: 'ID do benefício inválido.' });
         }
 
         const db = await connectToDatabase();
         
-        // Lógica para atualizar o banco
         const [result] = await db.query(
             "UPDATE beneficios SET status = 'entregue', data_entrega = CURDATE() WHERE id = ?", 
             [id]
         );
 
-        // Verifica se alguma linha foi realmente atualizada
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: 'Benefício não encontrado com o ID fornecido.' });
         }

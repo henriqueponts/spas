@@ -1,43 +1,4 @@
-/*import React from 'react';
-
-/**
- * MOCKUP: Página de Benefícios
- * 
- * Objetivo: Servir como placeholder para a funcionalidade de benefícios e
- * comunicar a regra de acesso para a equipe de desenvolvimento.
- */
-/*const Beneficios: React.FC = () => {
-  return (
-    // Container que centraliza tudo na tela
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      
-      <div className="max-w-2xl w-full text-center">
-        
-        {/* 1. O Título da Página *//*}
-        <h1 className="text-5xl font-bold text-gray-800">
-          Benefícios
-        </h1>
-
-        {/* 2. A Nota Explicativa sobre o Acesso }
-        <div className="mt-8 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-md text-left">
-          <p className="font-bold">Nota para a Equipe de Desenvolvimento:</p>
-          <p className="mt-2 text-sm">
-            Todos os usuários (internos e externos) têm acesso a esta página.
-            <br />
-            No entanto, para os <strong>colaboradores externos</strong>, esta deve ser a <strong>única página</strong> que eles podem acessar em toda a aplicação. O roteamento e a lógica de autenticação devem garantir essa restrição.
-          </p>
-        </div>
-
-      </div>
-
-    </div>
-  );
-};
-
-export default Beneficios;*/
-
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 
 // Interfaces para os dados
@@ -52,7 +13,7 @@ interface Familia {
 interface Beneficio {
   id: number;
   familia_id: number;
-  responsavel_nome: string;
+  responsavel_nome: string; // Nome do responsável da família
   tipo_beneficio: string;
   descricao_beneficio: string;
   data_concessao: string;
@@ -61,7 +22,9 @@ interface Beneficio {
   status: string;
   data_entrega: string;
   observacoes: string;
-  prontuario: string;
+  prontuario: string; // Prontuário da família
+  responsavel_id: string; // Nome do usuário que registrou o benefício (vindo da rota completa)
+  created_at: string; // Data de criação do registro do benefício
 }
 
 interface DadosBeneficio {
@@ -76,15 +39,21 @@ interface DadosBeneficio {
 }
 
 const BeneficiosPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'nova-entrega' | 'historico'>('nova-entrega');
+  const [activeTab, setActiveTab] = useState<'nova-entrega' | 'historico' | 'detalhes-beneficio'>('nova-entrega');
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState('nome');
   const [families, setFamilies] = useState<Familia[]>([]);
   const [selectedFamily, setSelectedFamily] = useState<Familia | null>(null);
   const [historico, setHistorico] = useState<Beneficio[]>([]);
+  const [selectedBeneficioForDetails, setSelectedBeneficioForDetails] = useState<Beneficio | null>(null); // Novo estado para detalhes
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
+
+  // Busca e filtro do histórico
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
+  const [historyFilterStatus, setHistoryFilterStatus] = useState('all');
+  const [historyFilterType, setHistoryFilterType] = useState('all');
 
   // Estado do formulário de benefício
   const [dadosBeneficio, setDadosBeneficio] = useState<DadosBeneficio>({
@@ -114,7 +83,8 @@ const BeneficiosPage: React.FC = () => {
 
   const fetchHistorico = async () => {
     try {
-      const response = await api.get('/auth/beneficios/historico');
+      // Usando a nova rota de histórico completo
+      const response = await api.get('/auth/beneficios/historico-completo');
       setHistorico(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao buscar histórico:', error);
@@ -127,12 +97,10 @@ const BeneficiosPage: React.FC = () => {
       showMessage('Digite um termo para buscar', 'error');
       return;
     }
-
     setLoading(true);
     try {
       const response = await api.get(`/auth/familias/buscar?tipo=${searchType}&termo=${encodeURIComponent(searchTerm)}`);
       setFamilies(Array.isArray(response.data) ? response.data : []);
-      
       if (response.data.length === 0) {
         showMessage('Nenhuma família encontrada', 'error');
       }
@@ -170,20 +138,13 @@ const BeneficiosPage: React.FC = () => {
     return true;
   };
 
-const salvarBeneficio = async (force: boolean = false) => {
-    // 1. Adicionamos um parâmetro 'force', que começa como false.
+  const salvarBeneficio = async (force: boolean = false) => {
     if (!validarFormulario()) return;
-
     setLoading(true);
     try {
-      // 2. Adicionamos a flag 'force' aos dados que serão enviados para a API.
       const dadosParaEnviar = { ...dadosBeneficio, force };
-
       await api.post('/auth/beneficios', dadosParaEnviar);
-      
-      // Se der certo, a lógica de sucesso é executada normalmente.
       showMessage('Benefício registrado com sucesso!', 'success');
-      
       // Limpar formulário
       setSelectedFamily(null);
       setDadosBeneficio({
@@ -198,29 +159,18 @@ const salvarBeneficio = async (force: boolean = false) => {
       });
       setFamilies([]);
       setSearchTerm('');
-      
       await fetchHistorico();
       setActiveTab('historico');
-      
     } catch (error: any) {
-      // 3. A MÁGICA ACONTECE AQUI, NO TRATAMENTO DE ERRO
-      // Verificamos se o erro é o nosso alerta de confirmação (código 409)
       if (error.response?.status === 409 && error.response?.data?.requiresConfirmation) {
-        
-        // Exibimos o popup de confirmação para o usuário
         const continuar = window.confirm(
           'ATENÇÃO: Esta família já recebeu um benefício este mês. Deseja registrar a entrega mesmo assim?'
         );
-
-        // Se o usuário clicar "OK", chamamos a função novamente, mas com `force = true`
         if (continuar) {
           salvarBeneficio(true);
-          // Importante: Não desativamos o loading aqui, pois uma nova requisição foi iniciada
-          return; // Sai da execução do catch
+          return;
         }
-
       } else {
-        // Se for qualquer outro tipo de erro, a sua lógica original de erro é executada
         console.error('Erro ao salvar benefício:', error);
         let errorMessage = 'Erro desconhecido';
         if (error?.response?.data?.message) {
@@ -231,9 +181,8 @@ const salvarBeneficio = async (force: boolean = false) => {
         showMessage(`Erro ao registrar benefício: ${errorMessage}`, 'error');
       }
     } finally {
-      // Desativa o loading apenas se a operação tiver realmente terminado
       if (!force) {
-          setLoading(false);
+        setLoading(false);
       }
     }
   };
@@ -252,11 +201,17 @@ const salvarBeneficio = async (force: boolean = false) => {
     }
   };
 
+  const handleViewDetails = (beneficio: Beneficio) => {
+    setSelectedBeneficioForDetails(beneficio);
+    setActiveTab('detalhes-beneficio');
+  };
+
   const formatCPF = (cpf: string) => {
     return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
@@ -267,15 +222,10 @@ const salvarBeneficio = async (force: boolean = false) => {
     }).format(value);
   };
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'concedido': return 'bg-yellow-100 text-yellow-800';
       case 'entregue': return 'bg-green-100 text-green-800';
-      case 'cancelado': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -284,7 +234,6 @@ const salvarBeneficio = async (force: boolean = false) => {
     switch (status) {
       case 'concedido': return 'Concedido';
       case 'entregue': return 'Entregue';
-      case 'cancelado': return 'Cancelado';
       default: return status;
     }
   };
@@ -297,451 +246,415 @@ const salvarBeneficio = async (force: boolean = false) => {
     { value: 'outro', label: 'Outro' }
   ];
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <button
-            onClick={() => window.history.back()}
-            className="text-blue-600 hover:text-blue-800 mb-4 flex items-center"
-          >
-            ← Voltar para o início
-          </button>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Entrega de Benefícios</h1>
-              <p className="text-gray-600 mt-2">Registre a entrega de benefícios eventuais às famílias</p>
-            </div>
-          </div>
-        </div>
+  const searchOptions = [
+    { value: 'nome', label: 'Responsável (Nome)' },
+    { value: 'cpf', label: 'Responsável (CPF)' },
+    { value: 'prontuario', label: 'Prontuário' },
+    { value: 'membro_nome', label: 'Membro da Família (Nome)' },
+    { value: 'membro_cpf', label: 'Membro da Família (CPF)' },
+    { value: 'membro_nis', label: 'Membro da Família (NIS)' }
+  ];
 
-        {/* Mensagens */}
+  // Filtragem do histórico
+  const filteredHistorico = useMemo(() => {
+    let currentHistorico = historico;
+    if (historySearchTerm) {
+      const lowerCaseSearchTerm = historySearchTerm.toLowerCase();
+      currentHistorico = currentHistorico.filter(beneficio =>
+        beneficio.responsavel_nome.toLowerCase().includes(lowerCaseSearchTerm) ||
+        (beneficio.prontuario && beneficio.prontuario.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        beneficio.tipo_beneficio.toLowerCase().includes(lowerCaseSearchTerm) ||
+        (beneficio.descricao_beneficio && beneficio.descricao_beneficio.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        beneficio.justificativa.toLowerCase().includes(lowerCaseSearchTerm) ||
+        (beneficio.observacoes && beneficio.observacoes.toLowerCase().includes(lowerCaseSearchTerm)) ||
+        (beneficio.responsavel_id && beneficio.responsavel_id.toLowerCase().includes(lowerCaseSearchTerm)) // Inclui busca pelo nome do usuário
+      );
+    }
+    if (historyFilterStatus !== 'all') {
+      currentHistorico = currentHistorico.filter(beneficio => beneficio.status === historyFilterStatus);
+    }
+    if (historyFilterType !== 'all') {
+      // Correção aqui: era benefic..icativa
+      currentHistorico = currentHistorico.filter(beneficio => beneficio.tipo_beneficio === historyFilterType);
+    }
+    return currentHistorico;
+  }, [historico, historySearchTerm, historyFilterStatus, historyFilterType]);
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-5xl font-bold text-gray-800 text-center mb-10">Gestão de Benefícios</h1>
+
         {message && (
-          <div className={`mb-6 p-4 rounded-md ${
-            messageType === 'success'
-              ? 'bg-green-50 text-green-800 border border-green-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}>
+          <div className={`p-4 mb-6 rounded-md text-center ${messageType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
             {message}
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveTab('nova-entrega')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'nova-entrega'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Nova Entrega
-              </button>
-              <button
-                onClick={() => setActiveTab('historico')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'historico'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Histórico de Entregas
-              </button>
-            </nav>
-          </div>
+        <div className="mb-8 flex justify-center space-x-4">
+          <button
+            onClick={() => { setActiveTab('nova-entrega'); setSelectedBeneficioForDetails(null); }}
+            className={`px-8 py-3 rounded-md text-lg font-semibold transition-colors duration-200 ${activeTab === 'nova-entrega' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+          >
+            Nova Entrega
+          </button>
+          <button
+            onClick={() => { setActiveTab('historico'); setSelectedBeneficioForDetails(null); }}
+            className={`px-8 py-3 rounded-md text-lg font-semibold transition-colors duration-200 ${activeTab === 'historico' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+          >
+            Histórico
+          </button>
+          {selectedBeneficioForDetails && (
+            <button
+              onClick={() => setActiveTab('detalhes-beneficio')}
+              className={`px-8 py-3 rounded-md text-lg font-semibold transition-colors duration-200 ${activeTab === 'detalhes-beneficio' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+            >
+              Detalhes do Benefício
+            </button>
+          )}
         </div>
 
-        {/* Conteúdo das Tabs */}
         {activeTab === 'nova-entrega' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Card de Busca */}
-            <div className="bg-white shadow rounded-lg lg:col-span-1">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                  <div className="bg-blue-100 rounded-full w-8 h-8 flex items-center justify-center mr-3">
-                    <span className="text-blue-600 text-lg">🔍</span>
-                  </div>
-                  Buscar Família
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">Localize a família para entrega do benefício</p>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tipo de Busca
-                  </label>
-                  <select
-                    value={searchType}
-                    onChange={(e) => setSearchType(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="nome">Nome do Responsável</option>
-                    <option value="cpf">CPF</option>
-                    <option value="nis">NIS</option>
-                    <option value="prontuario">Prontuário</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {searchType === 'nome' && 'Nome do Responsável'}
-                    {searchType === 'cpf' && 'CPF'}
-                    {searchType === 'nis' && 'NIS'}
-                    {searchType === 'prontuario' && 'Prontuário'}
-                  </label>
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder={`Digite o ${searchType === 'nome' ? 'nome' : searchType.toUpperCase()}`}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  />
-                </div>
-                
+          <div className="bg-white shadow-xl rounded-lg p-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Registrar Nova Entrega de Benefício</h2>
+
+            {/* Seção de Busca de Famílias */}
+            <div className="mb-8 p-6 bg-gray-50 rounded-md shadow-inner">
+              <h3 className="text-2xl font-semibold text-gray-700 mb-4">1. Buscar Família</h3>
+              <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                <select
+                  className="p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 flex-none w-full sm:w-auto"
+                  value={searchType}
+                  onChange={(e) => setSearchType(e.target.value)}
+                >
+                  {searchOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="Digite o termo de busca..."
+                  className="flex-1 p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyPress={(e) => { if (e.key === 'Enter') handleSearch(); }}
+                />
                 <button
                   onClick={handleSearch}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex-none"
                   disabled={loading}
-                  className={`w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                    loading
-                      ? 'bg-blue-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
                 >
-                  🔍 {loading ? 'Buscando...' : 'Buscar'}
+                  {loading ? 'Buscando...' : 'Buscar'}
                 </button>
-
-                {/* Resultados da Busca */}
-                {families.length > 0 && (
-                  <div className="mt-6 space-y-4">
-                    <div className="border-t pt-4">
-                      <h3 className="font-medium text-sm text-gray-900 mb-3">Resultados da Busca</h3>
-                      <div className="space-y-3">
-                        {families.map((family) => (
-                          <div
-                            key={family.id}
-                            onClick={() => handleSelectFamily(family)}
-                            className={`border rounded-md p-3 cursor-pointer transition-colors ${
-                              selectedFamily?.id === family.id
-                                ? 'bg-blue-50 border-blue-300'
-                                : 'bg-white hover:bg-gray-50 border-gray-200'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="font-medium text-sm text-gray-900">{family.responsavel_nome}</h4>
-                                <p className="text-xs text-gray-500">CPF: {formatCPF(family.responsavel_cpf)}</p>
-                                <p className="text-xs text-gray-500">{family.equipamento_nome}</p>
-                              </div>
-                              <button
-                                className={`text-xs px-3 py-1 rounded-md border ${
-                                  selectedFamily?.id === family.id
-                                    ? 'bg-blue-600 text-white border-blue-600'
-                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                                }`}
-                              >
-                                {selectedFamily?.id === family.id ? 'Selecionado' : 'Selecionar'}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
+
+              {families.length > 0 && (
+                <div className="mt-6 border-t border-gray-200 pt-4">
+                  <h4 className="text-lg font-medium text-gray-700 mb-3">Resultados da Busca:</h4>
+                  <ul className="space-y-3">
+                    {families.map(family => (
+                      <li key={family.id} className="flex items-center justify-between bg-white p-4 rounded-md shadow-sm border border-gray-200">
+                        <div>
+                          <p className="font-semibold text-gray-900">{family.responsavel_nome}</p>
+                          <p className="text-sm text-gray-600">CPF: {formatCPF(family.responsavel_cpf)} | Prontuário: {family.prontuario}</p>
+                          <p className="text-xs text-gray-500">Equipamento: {family.equipamento_nome}</p>
+                        </div>
+                        <button
+                          onClick={() => handleSelectFamily(family)}
+                          className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-sm"
+                        >
+                          Selecionar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {/* Card de Registro */}
-            <div className="bg-white shadow rounded-lg lg:col-span-2">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                  <div className="bg-blue-100 rounded-full w-8 h-8 flex items-center justify-center mr-3">
-                    <span className="text-blue-600 text-lg">📦</span>
-                  </div>
-                  Registrar Entrega de Benefício
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">Preencha os dados para registrar a entrega</p>
-              </div>
-              <div className="p-6 space-y-6">
-                {/* Família Selecionada */}
-                {selectedFamily ? (
-                  <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                    <h3 className="text-lg font-medium mb-4 flex items-center text-gray-900">
-                      <span className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full inline-flex items-center justify-center mr-2 text-sm">
-                        1
-                      </span>
-                      Família Selecionada
-                    </h3>
-                    <div className="flex items-center gap-4 p-4 bg-white rounded-md shadow-sm">
-                      <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center">
-                        <span className="text-blue-600 font-medium">
-                          {getInitials(selectedFamily.responsavel_nome)}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">{selectedFamily.responsavel_nome}</h4>
-                        <p className="text-sm text-gray-600">CPF: {formatCPF(selectedFamily.responsavel_cpf)}</p>
-                        <p className="text-sm text-gray-600">{selectedFamily.equipamento_nome}</p>
-                      </div>
-                      <span className="ml-auto bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                        Selecionado
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <div className="flex items-center">
-                      <span className="text-yellow-600 mr-2">⚠️</span>
-                      <p className="text-sm text-yellow-700">
-                        Selecione uma família para continuar com o registro do benefício.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Dados do Benefício */}
-                <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                  <h3 className="text-lg font-medium mb-4 flex items-center text-gray-900">
-                    <span className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full inline-flex items-center justify-center mr-2 text-sm">
-                      2
-                    </span>
-                    Dados do Benefício
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Tipo de Benefício *
-                      </label>
-                      <select
-                        value={dadosBeneficio.tipo_beneficio}
-                        onChange={(e) => setDadosBeneficio(prev => ({
-                          ...prev,
-                          tipo_beneficio: e.target.value
-                        }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Selecione o tipo de benefício</option>
-                        {tiposBeneficio.map(tipo => (
-                          <option key={tipo.value} value={tipo.value}>
-                            {tipo.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Valor (R$)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={dadosBeneficio.valor}
-                        onChange={(e) => setDadosBeneficio(prev => ({
-                          ...prev,
-                          valor: parseFloat(e.target.value) || 0
-                        }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Data da Concessão *
-                      </label>
-                      <input
-                        type="date"
-                        value={dadosBeneficio.data_concessao}
-                        onChange={(e) => setDadosBeneficio(prev => ({
-                          ...prev,
-                          data_concessao: e.target.value
-                        }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Data da Entrega
-                      </label>
-                      <input
-                        type="date"
-                        value={dadosBeneficio.data_entrega}
-                        onChange={(e) => setDadosBeneficio(prev => ({
-                          ...prev,
-                          data_entrega: e.target.value
-                        }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Descrição do Benefício
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Descreva o benefício específico"
-                        value={dadosBeneficio.descricao_beneficio}
-                        onChange={(e) => setDadosBeneficio(prev => ({
-                          ...prev,
-                          descricao_beneficio: e.target.value
-                        }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Justificativa *
-                      </label>
-                      <textarea
-                        placeholder="Justificativa para a concessão do benefício"
-                        value={dadosBeneficio.justificativa}
-                        onChange={(e) => setDadosBeneficio(prev => ({
-                          ...prev,
-                          justificativa: e.target.value
-                        }))}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
+            {/* Seção de Registro de Benefício */}
+            <div className="mt-8 p-6 bg-gray-50 rounded-md shadow-inner">
+              <h3 className="text-2xl font-semibold text-gray-700 mb-4">2. Registrar Benefício para a Família</h3>
+              {selectedFamily ? (
+                <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded-md">
+                  <p className="font-bold">Família Selecionada:</p>
+                  <p>{selectedFamily.responsavel_nome} (Prontuário: {selectedFamily.prontuario})</p>
                 </div>
+              ) : (
+                <p className="text-gray-600 mb-6">Nenhuma família selecionada. Por favor, busque e selecione uma família acima.</p>
+              )}
 
-                {/* Observações */}
-                <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                  <h3 className="text-lg font-medium mb-4 flex items-center text-gray-900">
-                    <span className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full inline-flex items-center justify-center mr-2 text-sm">
-                      3
-                    </span>
-                    Observações
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Observações Adicionais
-                      </label>
-                      <textarea
-                        placeholder="Observações adicionais sobre o benefício"
-                        value={dadosBeneficio.observacoes}
-                        onChange={(e) => setDadosBeneficio(prev => ({
-                          ...prev,
-                          observacoes: e.target.value
-                        }))}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    
-                    <div className="flex justify-end">
-                      <button
-                        onClick={() => salvarBeneficio()} 
-                        disabled={loading || !selectedFamily}
-                        className={`flex items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                          loading || !selectedFamily
-                            ? 'bg-blue-400 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700'
-                        } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
-                      >
-                        ✓ {loading ? 'Registrando...' : 'Registrar Benefício'}
-                      </button>
-                    </div>
-                  </div>
+              <form onSubmit={(e) => { e.preventDefault(); salvarBeneficio(); }} className="space-y-6">
+                <div>
+                  <label htmlFor="tipo_beneficio" className="block text-sm font-medium text-gray-700">Tipo de Benefício</label>
+                  <select
+                    id="tipo_beneficio"
+                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    value={dadosBeneficio.tipo_beneficio}
+                    onChange={(e) => setDadosBeneficio({ ...dadosBeneficio, tipo_beneficio: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecione um tipo</option>
+                    {tiposBeneficio.map(tipo => (
+                      <option key={tipo.value} value={tipo.value}>{tipo.label}</option>
+                    ))}
+                  </select>
                 </div>
-              </div>
+                <div>
+                  <label htmlFor="descricao_beneficio" className="block text-sm font-medium text-gray-700">Descrição Detalhada (Opcional)</label>
+                  <input
+                    type="text"
+                    id="descricao_beneficio"
+                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    value={dadosBeneficio.descricao_beneficio}
+                    onChange={(e) => setDadosBeneficio({ ...dadosBeneficio, descricao_beneficio: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="valor" className="block text-sm font-medium text-gray-700">Valor (R$)</label>
+                  <input
+                    type="number"
+                    id="valor"
+                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    value={dadosBeneficio.valor}
+                    onChange={(e) => setDadosBeneficio({ ...dadosBeneficio, valor: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="justificativa" className="block text-sm font-medium text-gray-700">Justificativa</label>
+                  <textarea
+                    id="justificativa"
+                    rows={3}
+                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    value={dadosBeneficio.justificativa}
+                    onChange={(e) => setDadosBeneficio({ ...dadosBeneficio, justificativa: e.target.value })}
+                    required
+                  ></textarea>
+                </div>
+                <div>
+                  <label htmlFor="data_concessao" className="block text-sm font-medium text-gray-700">Data de Registro</label>
+                  <input
+                    type="date"
+                    id="data_concessao"
+                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    value={dadosBeneficio.data_concessao}
+                    onChange={(e) => setDadosBeneficio({ ...dadosBeneficio, data_concessao: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="data_entrega" className="block text-sm font-medium text-gray-700">Data Prevista de Entrega (Opcional)</label>
+                  <input
+                    type="date"
+                    id="data_entrega"
+                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    value={dadosBeneficio.data_entrega}
+                    onChange={(e) => setDadosBeneficio({ ...dadosBeneficio, data_entrega: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="observacoes" className="block text-sm font-medium text-gray-700">Observações (Opcional)</label>
+                  <textarea
+                    id="observacoes"
+                    rows={2}
+                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    value={dadosBeneficio.observacoes}
+                    onChange={(e) => setDadosBeneficio({ ...dadosBeneficio, observacoes: e.target.value })}
+                  ></textarea>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-lg font-semibold"
+                  disabled={loading}
+                >
+                  {loading ? 'Registrando...' : 'Registrar Benefício'}
+                </button>
+              </form>
             </div>
           </div>
         )}
 
-        {/* Histórico de Entregas */}
         {activeTab === 'historico' && (
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                <div className="bg-blue-100 rounded-full w-8 h-8 flex items-center justify-center mr-3">
-                  <span className="text-blue-600 text-lg">🕐</span>
-                </div>
-                Histórico de Entregas
-              </h2>
-              <p className="text-sm text-gray-600 mt-1">Benefícios registrados no sistema</p>
+          <div className="bg-white shadow-xl rounded-lg p-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Histórico de Benefícios</h2>
+            {/* Search and Filter for Historico */}
+            <div className="flex flex-wrap gap-4 mb-6">
+              <input
+                type="text"
+                placeholder="Buscar no histórico (nome, prontuário, benefício...)"
+                className="flex-1 p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                value={historySearchTerm}
+                onChange={(e) => setHistorySearchTerm(e.target.value)}
+              />
+              <select
+                className="p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                value={historyFilterStatus}
+                onChange={(e) => setHistoryFilterStatus(e.target.value)}
+              >
+                <option value="all">Todos os Status</option>
+                <option value="concedido">Concedido</option>
+                <option value="entregue">Entregue</option>
+              </select>
+              <select
+                className="p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                value={historyFilterType}
+                onChange={(e) => setHistoryFilterType(e.target.value)}
+              >
+                <option value="all">Todos os Tipos de Benefício</option>
+                {tiposBeneficio.map(tipo => (
+                  <option key={tipo.value} value={tipo.value}>{tipo.label}</option>
+                ))}
+              </select>
             </div>
-            <div className="p-6">
-              {historico.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">Nenhum benefício registrado ainda.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {historico.map((item) => (
-                    <div key={item.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-start gap-4">
-                        <div className="bg-blue-100 rounded-full w-10 h-10 flex items-center justify-center mt-1">
-                          <span className="text-blue-600 font-medium text-sm">
-                            {getInitials(item.responsavel_nome)}
+            {filteredHistorico.length === 0 ? (
+              <p className="text-center text-gray-600 text-lg">Nenhum benefício encontrado no histórico com os critérios de busca/filtro.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white rounded-lg shadow-md">
+                  <thead className="bg-gray-100 border-b border-gray-200">
+                    <tr>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Família</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prontuário</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Benefício</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Concessão</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entrega</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registrado Por</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredHistorico.map((beneficio) => (
+                      <tr key={beneficio.id} className="hover:bg-gray-50">
+                        <td className="py-4 px-6 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {beneficio.responsavel_nome}
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-600">
+                          {beneficio.prontuario}
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-600">
+                          <span className="font-semibold">{tiposBeneficio.find(t => t.value === beneficio.tipo_beneficio)?.label || beneficio.tipo_beneficio}</span>
+                          {beneficio.descricao_beneficio && <p className="text-xs text-gray-500 mt-1">{beneficio.descricao_beneficio}</p>}
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-600">
+                          {formatCurrency(beneficio.valor)}
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-600">
+                          {formatDate(beneficio.data_concessao)}
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-600">
+                          {beneficio.data_entrega ? formatDate(beneficio.data_entrega) : 'Pendente'}
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap text-sm">
+                          <span
+                            className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(beneficio.status)}`}
+                          >
+                            {getStatusLabel(beneficio.status)}
                           </span>
-                        </div>
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="font-medium flex items-center gap-2 text-gray-900">
-                              👤 {item.responsavel_nome}
-                            </div>
-                            <div className="text-sm text-gray-500 flex items-center gap-2">
-                              📅 {formatDate(item.data_concessao)}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm text-gray-700">
-                              <span className="font-medium">Benefício:</span> {
-                                tiposBeneficio.find(t => t.value === item.tipo_beneficio)?.label || item.tipo_beneficio
-                              }
-                              {item.descricao_beneficio && ` - ${item.descricao_beneficio}`}
-                            </p>
-                            <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(item.status)}`}>
-                              {getStatusLabel(item.status)}
-                            </span>
-                          </div>
-                          {item.valor > 0 && (
-                            <p className="text-sm text-gray-700">
-                              <span className="font-medium">Valor:</span> {formatCurrency(item.valor)}
-                            </p>
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-600">
+                          {beneficio.responsavel_id || 'N/A'}
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap text-sm font-medium flex gap-2">
+                          {beneficio.status === 'concedido' && (
+                            <button
+                              onClick={() => marcarComoEntregue(beneficio.id)}
+                              className="text-indigo-600 hover:text-indigo-900"
+                              disabled={loading}
+                            >
+                              Marcar como Entregue
+                            </button>
                           )}
-                          <p className="text-sm text-gray-700">
-                            <span className="font-medium">Justificativa:</span> {item.justificativa}
-                          </p>
-                          {item.data_entrega && (
-                            <p className="text-sm text-gray-700">
-                              <span className="font-medium">Data da entrega:</span> {formatDate(item.data_entrega)}
-                            </p>
-                          )}
-                          {item.observacoes && (
-                            <p className="text-sm text-gray-700">
-                              <span className="font-medium">Observações:</span> {item.observacoes}
-                            </p>
-                          )}
-                          {item.status === 'concedido' && (
-                            <div className="flex justify-end mt-2">
-                              <button
-                                onClick={() => marcarComoEntregue(item.id)}
-                                disabled={loading}
-                                className="text-xs px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                              >
-                                Marcar como Entregue
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                          <button
+                            onClick={() => handleViewDetails(beneficio)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            Ver Detalhes
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'detalhes-beneficio' && selectedBeneficioForDetails && (
+          <div className="bg-white shadow-xl rounded-lg p-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Detalhes do Benefício</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-lg">
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">ID do Benefício:</p>
+                <p className="text-gray-900">{selectedBeneficioForDetails.id}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Família Responsável:</p>
+                <p className="text-gray-900">{selectedBeneficioForDetails.responsavel_nome} </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Prontuário da Família:</p>
+                <p className="text-gray-900">{selectedBeneficioForDetails.prontuario}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Tipo de Benefício:</p>
+                <p className="text-gray-900">{tiposBeneficio.find(t => t.value === selectedBeneficioForDetails.tipo_beneficio)?.label || selectedBeneficioForDetails.tipo_beneficio}</p>
+              </div>
+              {selectedBeneficioForDetails.descricao_beneficio && (
+                <div className="bg-gray-50 p-4 rounded-md shadow-sm col-span-1 md:col-span-2">
+                  <p className="font-semibold text-gray-700">Descrição Detalhada:</p>
+                  <p className="text-gray-900">{selectedBeneficioForDetails.descricao_beneficio}</p>
                 </div>
               )}
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Valor:</p>
+                <p className="text-gray-900">{formatCurrency(selectedBeneficioForDetails.valor)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Status:</p>
+                <p className={`text-gray-900 ${getStatusColor(selectedBeneficioForDetails.status)} inline-block px-3 py-1 rounded-full text-sm font-semibold`}>
+                  {getStatusLabel(selectedBeneficioForDetails.status)}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Data de Concessão:</p>
+                <p className="text-gray-900">{formatDate(selectedBeneficioForDetails.data_concessao)}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Data de Entrega:</p>
+                <p className="text-gray-900">{selectedBeneficioForDetails.data_entrega ? formatDate(selectedBeneficioForDetails.data_entrega) : 'Não entregue'}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm col-span-1 md:col-span-2">
+                <p className="font-semibold text-gray-700">Justificativa:</p>
+                <p className="text-gray-900">{selectedBeneficioForDetails.justificativa}</p>
+              </div>
+              {selectedBeneficioForDetails.observacoes && (
+                <div className="bg-gray-50 p-4 rounded-md shadow-sm col-span-1 md:col-span-2">
+                  <p className="font-semibold text-gray-700">Observações:</p>
+                  <p className="text-gray-900">{selectedBeneficioForDetails.observacoes}</p>
+                </div>
+              )}
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Registrado Por:</p>
+                <p className="text-gray-900">{selectedBeneficioForDetails.responsavel_id || 'N/A'}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                <p className="font-semibold text-gray-700">Data de Registro no Sistema:</p>
+                <p className="text-gray-900">{formatDate(selectedBeneficioForDetails.created_at)}</p>
+              </div>
+            </div>
+            <div className="mt-8 text-center">
+              <button
+                onClick={() => setActiveTab('historico')}
+                className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-lg font-semibold"
+              >
+                Voltar ao Histórico
+              </button>
             </div>
           </div>
         )}
