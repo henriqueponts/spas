@@ -739,6 +739,66 @@ router.get("/verificar-tabelas", async (req, res) => {
   }
 })
 
+// Rota de busca Familia (específica)
+router.get('/familias/buscar', async (req, res) => {
+    try {
+        const db = await connectToDatabase();
+        const { tipo, termo } = req.query; 
+        let sqlQuery = `
+            SELECT DISTINCT
+                f.id,
+                p_resp.nome_completo AS responsavel_nome,
+                p_resp.cpf AS responsavel_cpf,
+                f.prontuario
+            FROM familias f
+            LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
+            LEFT JOIN pessoas p_membro ON f.id = p_membro.familia_id
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (!termo) {
+            return res.status(400).json({ message: 'Termo de busca não fornecido.' });
+        }
+
+        const likeTerm = `%${termo}%`;
+        switch (tipo) {
+            case 'nome': // Busca por nome do responsável
+                sqlQuery += ` AND p_resp.nome_completo LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'cpf': // Busca por CPF do responsável
+                sqlQuery += ` AND p_resp.cpf LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'prontuario': // Busca por prontuário da família
+                sqlQuery += ` AND f.prontuario LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'membro_nome': // Nova busca por nome de membro da família
+                sqlQuery += ` AND p_membro.nome_completo LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'membro_cpf': // Nova busca por CPF de membro da família
+                sqlQuery += ` AND p_membro.cpf LIKE ?`;
+                params.push(likeTerm);
+                break;
+            case 'membro_nis': // Nova busca por NIS de membro da família
+                sqlQuery += ` AND p_membro.nis LIKE ?`;
+                params.push(likeTerm);
+                break;
+            default:
+                return res.status(400).json({ message: 'Tipo de busca inválido.' });
+        }
+
+        const [results] = await db.query(sqlQuery, params);
+        res.json(results);
+    } catch (error) {
+        console.error('Erro na busca de famílias:', error);
+        res.status(500).json({ message: 'Erro interno do servidor', error: error.message });
+    }
+});
+
 // ============================================
 // ENDPOINT COM DEBUG MELHORADO - ADICIONE NO authRoutes.js
 // ============================================
@@ -1678,5 +1738,189 @@ function isDateInPast(date) {
 
   return inputDate < today
 }
+
+// Rota para cadastrar beneficios 
+router.post('/beneficios', verifyToken, async (req, res) => {
+    let dbtransacao;
+    try {
+        dbtransacao = await connectToDatabase();
+        await dbtransacao.beginTransaction();
+        const {
+            familia_id, tipo_beneficio, descricao_beneficio, data_concessao,
+            valor, justificativa, data_entrega, observacoes,
+            force
+        } = req.body;
+
+        const responsavel_id = req.userId; 
+        // Campos obrigatorios
+        if (!familia_id || !tipo_beneficio || !justificativa) {
+            return res.status(400).json({ message: 'Campos obrigatórios não preenchidos.' });
+        }
+
+        // Validação de Duplicidade no mês (por família)
+        if (!force) {
+            const [existingBenefits] = await dbtransacao.query(
+                `SELECT b.id, b.tipo_beneficio, p_resp.nome_completo AS responsavel_familia_nome
+                 FROM beneficios b
+                 LEFT JOIN familias f ON b.familia_id = f.id
+                 LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
+                 WHERE
+                     b.familia_id = ? AND
+                     MONTH(b.data_concessao) = MONTH(CURDATE()) AND
+                     YEAR(b.data_concessao) = YEAR(CURDATE())
+                 LIMIT 1`,
+                [familia_id]
+            );
+
+            if (existingBenefits.length > 0) {
+                const { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente } = existingBenefits[0];
+                return res.status(409).json({
+                    message: `ATENÇÃO: A família de ${responsavel_familia_nome || 'um responsável'} já recebeu um benefício do tipo "${tipoBeneficioExistente}" este mês. Deseja registrar a entrega mesmo assim?`,
+                    requiresConfirmation: true,
+                    existingBenefit: { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente } 
+                });
+            }
+        }
+
+        const dataEntregaFinal = data_entrega ? data_entrega : null;
+        const sqlQuery = `
+            INSERT INTO beneficios (
+                familia_id, tipo_beneficio, descricao_beneficio, data_concessao, valor,
+                justificativa, responsavel_id, status, data_entrega, observacoes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const params = [
+            familia_id, tipo_beneficio, descricao_beneficio || '', data_concessao,
+            valor || 0, justificativa, responsavel_id, 'concedido',
+            dataEntregaFinal, observacoes || ''
+        ];
+
+        const [result] = await dbtransacao.query(sqlQuery, params);
+        await dbtransacao.commit();
+        const beneficio_id = result.insertId;
+
+        const [beneficioInserido] = await dbtransacao.query(`
+            SELECT b.*, u.nome as responsavel_id, f.prontuario, p.nome_completo as responsavel_nome
+            FROM beneficios b
+            LEFT JOIN familias f ON b.familia_id = f.id
+            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+            LEFT JOIN usuarios u ON b.responsavel_id = u.id
+            WHERE b.id = ?
+        `, [beneficio_id]);
+
+        return res.status(201).json(beneficioInserido[0]);
+    } catch (err) {
+        if (dbtransacao) {
+            await dbtransacao.rollback();
+        }
+        console.error("Erro ao registrar benefício:", err);
+        return res.status(500).json({ message: err.sqlMessage || err.message || 'Erro interno do servidor' });
+    }
+});
+
+    // Rota para buscar o HISTÓRICO de Benefícios
+router.get('/beneficios/historico', async (req, res) => {
+    try {
+        const db = await connectToDatabase();
+        
+        const [results] = await db.query(`
+            SELECT
+                b.id, b.familia_id, b.tipo_beneficio, b.descricao_beneficio,
+                b.data_concessao, b.valor, b.justificativa, b.status,
+                b.data_entrega, b.observacoes,
+                COALESCE(p.nome_completo, 'Responsável não encontrado') as responsavel_nome,
+                COALESCE(f.prontuario, 'Prontuário não encontrado') as prontuario
+            FROM beneficios b
+            LEFT JOIN familias f ON b.familia_id = f.id
+            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+            ORDER BY b.data_concessao DESC, b.created_at DESC
+            LIMIT 100
+        `);
+        
+        res.json(results);
+    } catch (error) {
+        console.error('Erro ao buscar histórico de benefícios:', error);
+        res.status(500).json({ message: 'Erro ao buscar histórico', error: error.message });
+    }
+});
+
+    // Atualizar rota de histórico completo
+    router.get('/beneficios/historico-completo', async (req, res) => {
+        console.log('📋 Rota GET /beneficios/historico-completo chamada');
+
+        try {
+            const db = await connectToDatabase();
+
+            console.log('🔍 Buscando histórico completo...');
+
+            const [results] = await db.query(`
+                SELECT
+                    b.id,
+                    b.familia_id,
+                    b.tipo_beneficio,
+                    b.descricao_beneficio,
+                    b.data_concessao,
+                    b.valor,
+                    b.justificativa,
+                    b.status,
+                    b.data_entrega,
+                    b.observacoes,
+                    b.created_at,
+                    COALESCE(p.nome_completo, 'Nome não encontrado') as responsavel_nome,
+                    COALESCE(f.prontuario, 'Prontuário não encontrado') as prontuario,
+                    COALESCE(u.nome, 'Usuário não encontrado') as responsavel_id
+                FROM beneficios b
+                LEFT JOIN familias f ON b.familia_id = f.id
+                LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+                LEFT JOIN usuarios u ON b.responsavel_id = u.id
+                ORDER BY b.created_at DESC
+                LIMIT 50
+            `);
+
+            console.log('✅ Histórico completo encontrado:', results.length, 'benefícios');
+
+            res.json(results);
+        } catch (error) {
+            console.error('❌ Erro ao buscar histórico completo:', error);
+            res.status(500).json({
+                message: 'Erro ao buscar histórico completo',
+                error: error.message
+            });
+        }
+    });
+    
+// Rota para Marcar Beneficio como entregue
+router.put('/beneficios/:id/entregar', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+
+        if (!id || isNaN(parseInt(id)) || parseInt(id) <= 0) {
+            return res.status(400).json({ message: 'ID do benefício inválido.' });
+        }
+
+        const db = await connectToDatabase();
+        
+        const [result] = await db.query(
+            "UPDATE beneficios SET status = 'entregue', data_entrega = CURDATE() WHERE id = ?", 
+            [id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Benefício não encontrado com o ID fornecido.' });
+        }
+
+        return res.status(200).json({ message: 'Benefício marcado como entregue com sucesso!' });
+
+    } catch (err) {
+        console.error("💥 ERRO AO ATUALIZAR BENEFÍCIO:", err); 
+        return res.status(500).json({ 
+            message: err.sqlMessage || err.message || 'Erro ao atualizar status do benefício' 
+        });
+    }
+});
+
+
+
 
 export default router
