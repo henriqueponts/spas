@@ -2189,10 +2189,15 @@ const CadastroFamilia: React.FC = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      value="cras"
-                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("cras")}
+                      value="assistencia_social"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("assistencia_social")}
                       onChange={(e) =>
-                        handleCheckboxChange("situacao_social", "servicos_publicos", "cras", e.target.checked)
+                        handleCheckboxChange(
+                          "situacao_social",
+                          "servicos_publicos",
+                          "assistencia_social",
+                          e.target.checked,
+                        )
                       }
                       className="mr-2"
                     />
@@ -2201,10 +2206,15 @@ const CadastroFamilia: React.FC = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      value="creas"
-                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("creas")}
+                      value="assistencia_social"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("assistencia_social")}
                       onChange={(e) =>
-                        handleCheckboxChange("situacao_social", "servicos_publicos", "creas", e.target.checked)
+                        handleCheckboxChange(
+                          "situacao_social",
+                          "servicos_publicos",
+                          "assistencia_social",
+                          e.target.checked,
+                        )
                       }
                       className="mr-2"
                     />
@@ -2237,14 +2247,38 @@ const CadastroFamilia: React.FC = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      value="habitacao"
-                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("habitacao")}
+                      value="cultura"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("cultura")}
                       onChange={(e) =>
-                        handleCheckboxChange("situacao_social", "servicos_publicos", "habitacao", e.target.checked)
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "cultura", e.target.checked)
                       }
                       className="mr-2"
                     />
-                    Habitação
+                    Cultura
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="esporte"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("esporte")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "esporte", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Esporte
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="lazer"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("lazer")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "lazer", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Lazer
                   </label>
                   <label className="flex items-center">
                     <input
@@ -2302,15 +2336,7 @@ const CadastroFamilia: React.FC = () => {
         <h1 className="text-2xl font-semibold mb-4">Cadastro de Família</h1>
 
         {message && (
-          <Alert
-            variant={
-              messageType === "error"
-                ? "destructive"
-                : messageType === "success"
-                  ? "default"
-                  : undefined
-            }
-          >
+          <Alert variant={messageType === "error" ? "destructive" : messageType === "success" ? "default" : undefined}>
             {message}
           </Alert>
         )}
