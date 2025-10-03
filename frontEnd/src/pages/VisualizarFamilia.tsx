@@ -33,6 +33,7 @@ import {
   Gift,
 } from "lucide-react"
 import Header from "../components/Header"
+import { gerarReciboAutorizacao } from "../pages/ReciboAutorizacao"
 
 // --- INTERFACES DE DADOS (Mantidas) ---
 interface Integrante {
@@ -262,7 +263,9 @@ const VisualizarFamilia: React.FC = () => {
 
     setLoadingEvolucao(true) // Reutilizando loadingEvolucao para simplificar, pois a lógica é similar
     try {
-      await api.post(`/auth/familias/${id}/autorizacoes-beneficios`, dadosAutorizacao)
+      const response = await api.post(`/auth/familias/${id}/autorizacoes-beneficios`, dadosAutorizacao)
+      const autorizacaoCriada = response.data
+
       setDadosAutorizacao({
         tipo_beneficio: "",
         quantidade: 1,
@@ -273,6 +276,32 @@ const VisualizarFamilia: React.FC = () => {
       setMostrarFormAutorizacao(false)
       await carregarAutorizacoes()
       alert("Benefício autorizado com sucesso!")
+
+      if (familia && user) {
+        gerarReciboAutorizacao({
+          familia: {
+            prontuario: familia.prontuario,
+            responsavel_nome: familia.responsavel.nome_completo,
+            responsavel_cpf: familia.responsavel.cpf,
+            endereco: `${familia.endereco.logradouro}, ${familia.endereco.numero || "S/N"}${familia.endereco.complemento ? ` - ${familia.endereco.complemento}` : ""} - ${familia.endereco.bairro}`,
+            cidade: familia.endereco.cidade,
+            uf: familia.endereco.uf,
+          },
+          autorizacao: {
+            tipo_beneficio: autorizacaoCriada.tipo_beneficio || dadosAutorizacao.tipo_beneficio,
+            quantidade: autorizacaoCriada.quantidade || dadosAutorizacao.quantidade,
+            validade_meses: autorizacaoCriada.validade_meses || dadosAutorizacao.validade_meses,
+            data_autorizacao: autorizacaoCriada.data_autorizacao || new Date().toISOString(),
+            data_validade: autorizacaoCriada.data_validade || new Date().toISOString(),
+            justificativa: autorizacaoCriada.justificativa || dadosAutorizacao.justificativa,
+            observacoes: autorizacaoCriada.observacoes || dadosAutorizacao.observacoes,
+          },
+          autorizador: {
+            nome: user.nome,
+            cargo: user.cargo_nome ?? "",
+          },
+        })
+      }
     } catch (error) {
       console.error("Erro ao autorizar benefício:", error)
       alert("Erro ao autorizar benefício. Tente novamente.")

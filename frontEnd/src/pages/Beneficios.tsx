@@ -7,14 +7,17 @@ import Header from "../components/Header"
 import { Search, PlusCircle, List, Info, Loader2, History } from "lucide-react"
 import { useAuth } from "../contexts/AuthContext"
 import { Cargo } from "../types"
+import { gerarReciboEntrega } from "./ReciboEntrega"
 
-// Interfaces para os dados (mantidas como estão)
 interface Familia {
   id: number
   responsavel_nome: string
   responsavel_cpf: string
   equipamento_nome: string
   prontuario: string
+  endereco: string
+  cidade: string
+  uf: string
 }
 
 interface AutorizacaoDisponivel {
@@ -59,7 +62,6 @@ interface DadosBeneficio {
 const BeneficiosPage: React.FC = () => {
   const { user } = useAuth()
 
-  // --- LÓGICA EXISTENTE (sem alterações) ---
   const [activeTab, setActiveTab] = useState<"nova-entrega" | "historico" | "detalhes-beneficio">("nova-entrega")
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -173,7 +175,6 @@ const BeneficiosPage: React.FC = () => {
       justificativa: "",
     }))
 
-    // Carregar autorizações disponíveis para esta família
     try {
       const response = await api.get(`/auth/familias/${family.id}/autorizacoes-beneficios/disponiveis`)
       setAutorizacoesDisponiveis(Array.isArray(response.data) ? response.data : [])
@@ -227,12 +228,70 @@ const BeneficiosPage: React.FC = () => {
       await api.post("/auth/beneficios", dadosParaEnviar)
       showMessage("Benefício entregue com sucesso!", "success")
 
+      if (selectedFamily && selectedAutorizacao) {
+        try {
+          const familiaCompleta = await api.get(`/auth/familias/${selectedFamily.id}`)
+          const dadosFamilia = familiaCompleta.data
+
+          const enderecoCompleto = dadosFamilia.endereco
+            ? `${dadosFamilia.endereco.logradouro || ""}, ${dadosFamilia.endereco.numero || "S/N"}${dadosFamilia.endereco.complemento ? ` - ${dadosFamilia.endereco.complemento}` : ""} - ${dadosFamilia.endereco.bairro || ""}`
+            : selectedFamily.endereco || ""
+
+          const cidade = dadosFamilia.endereco?.cidade || selectedFamily.cidade || ""
+          const uf = dadosFamilia.endereco?.uf || selectedFamily.uf || ""
+
+          gerarReciboEntrega({
+            familia: {
+              prontuario: selectedFamily.prontuario,
+              responsavel_nome: selectedFamily.responsavel_nome,
+              responsavel_cpf: selectedFamily.responsavel_cpf,
+              endereco: enderecoCompleto,
+              cidade: cidade,
+              uf: uf,
+            },
+            beneficio: {
+              tipo_beneficio: dadosBeneficio.tipo_beneficio,
+              descricao: dadosBeneficio.descricao_beneficio,
+              valor: dadosBeneficio.valor,
+              data_entrega: dadosBeneficio.data_entrega,
+              observacoes: dadosBeneficio.observacoes,
+            },
+            responsavel_entrega: {
+              nome: user?.nome || "",
+              cargo: user?.cargo_nome || "",
+            },
+          })
+        } catch (error) {
+          console.error("Erro ao buscar dados completos da família:", error)
+          gerarReciboEntrega({
+            familia: {
+              prontuario: selectedFamily.prontuario,
+              responsavel_nome: selectedFamily.responsavel_nome,
+              responsavel_cpf: selectedFamily.responsavel_cpf,
+              endereco: String(selectedFamily.endereco || ""),
+              cidade: String(selectedFamily.cidade || ""),
+              uf: String(selectedFamily.uf || ""),
+            },
+            beneficio: {
+              tipo_beneficio: dadosBeneficio.tipo_beneficio,
+              descricao: dadosBeneficio.descricao_beneficio,
+              valor: dadosBeneficio.valor,
+              data_entrega: dadosBeneficio.data_entrega,
+              observacoes: dadosBeneficio.observacoes,
+            },
+            responsavel_entrega: {
+              nome: user?.nome || "",
+              cargo: user?.cargo_nome || "",
+            },
+          })
+        }
+      }
+
       if (selectedFamily) {
         try {
           const response = await api.get(`/auth/familias/${selectedFamily.id}/autorizacoes-beneficios/disponiveis`)
           setAutorizacoesDisponiveis(Array.isArray(response.data) ? response.data : [])
 
-          // Se não houver mais autorizações disponíveis, limpar seleção
           if (response.data.length === 0) {
             showMessage("Todos os benefícios autorizados foram entregues para esta família", "success")
             setSelectedFamily(null)
@@ -367,7 +426,6 @@ const BeneficiosPage: React.FC = () => {
     return currentHistorico
   }, [historico, historySearchTerm, historyFilterStatus, historyFilterType])
 
-  // --- JSX ATUALIZADO COM O NOVO DESIGN ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
       <Header />
@@ -389,7 +447,6 @@ const BeneficiosPage: React.FC = () => {
           </div>
         )}
 
-        {/* Abas de Navegação */}
         <div className="mb-6 border-b border-gray-200">
           <nav className="-mb-px flex space-x-6">
             <button
@@ -429,7 +486,6 @@ const BeneficiosPage: React.FC = () => {
           </nav>
         </div>
 
-        {/* Conteúdo da Aba: Nova Entrega */}
         {activeTab === "nova-entrega" && (
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-md p-6">
@@ -658,7 +714,6 @@ const BeneficiosPage: React.FC = () => {
           </div>
         )}
 
-        {/* Conteúdo da Aba: Histórico */}
         {activeTab === "historico" && (
           <div className="bg-white rounded-lg shadow-md">
             <div className="p-6">
@@ -766,7 +821,6 @@ const BeneficiosPage: React.FC = () => {
           </div>
         )}
 
-        {/* Conteúdo da Aba: Detalhes */}
         {activeTab === "detalhes-beneficio" && selectedBeneficioForDetails && (
           <div className="bg-white shadow-xl rounded-lg p-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Detalhes do Benefício</h2>
