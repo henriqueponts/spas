@@ -739,6 +739,66 @@ router.get("/verificar-tabelas", async (req, res) => {
   }
 })
 
+// Rota de busca Familia (específica)
+router.get("/familias/buscar", async (req, res) => {
+  try {
+    const db = await connectToDatabase()
+    const { tipo, termo } = req.query
+    let sqlQuery = `
+            SELECT DISTINCT
+                f.id,
+                p_resp.nome_completo AS responsavel_nome,
+                p_resp.cpf AS responsavel_cpf,
+                f.prontuario
+            FROM familias f
+            LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
+            LEFT JOIN pessoas p_membro ON f.id = p_membro.familia_id
+            WHERE 1=1
+        `
+    const params = []
+
+    if (!termo) {
+      return res.status(400).json({ message: "Termo de busca não fornecido." })
+    }
+
+    const likeTerm = `%${termo}%`
+    switch (tipo) {
+      case "nome": // Busca por nome do responsável
+        sqlQuery += ` AND p_resp.nome_completo LIKE ?`
+        params.push(likeTerm)
+        break
+      case "cpf": // Busca por CPF do responsável
+        sqlQuery += ` AND p_resp.cpf LIKE ?`
+        params.push(likeTerm)
+        break
+      case "prontuario": // Busca por prontuário da família
+        sqlQuery += ` AND f.prontuario LIKE ?`
+        params.push(likeTerm)
+        break
+      case "membro_nome": // Nova busca por nome de membro da família
+        sqlQuery += ` AND p_membro.nome_completo LIKE ?`
+        params.push(likeTerm)
+        break
+      case "membro_cpf": // Nova busca por CPF de membro da família
+        sqlQuery += ` AND p_membro.cpf LIKE ?`
+        params.push(likeTerm)
+        break
+      case "membro_nis": // Nova busca por NIS de membro da família
+        sqlQuery += ` AND p_membro.nis LIKE ?`
+        params.push(likeTerm)
+        break
+      default:
+        return res.status(400).json({ message: "Tipo de busca inválido." })
+    }
+
+    const [results] = await db.query(sqlQuery, params)
+    res.json(results)
+  } catch (error) {
+    console.error("Erro na busca de famílias:", error)
+    res.status(500).json({ message: "Erro interno do servidor", error: error.message })
+  }
+})
+
 // ============================================
 // ENDPOINT COM DEBUG MELHORADO - ADICIONE NO authRoutes.js
 // ============================================
@@ -1327,7 +1387,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     }
     console.log("✅ Programas sociais atualizados")
 
-    // 10. Atualizar despesas (remover todas e inserir novamente)
+    // 10. Atualizar despesas (remover todos e inserir novamente)
     console.log("💰 Atualizando despesas...")
     await db.query("DELETE FROM familia_despesas WHERE familia_id = ?", [familia_id])
 
@@ -1678,5 +1738,477 @@ function isDateInPast(date) {
 
   return inputDate < today
 }
+
+// Rota para cadastrar beneficios
+router.post("/beneficios", verifyToken, async (req, res) => {
+  let dbtransacao
+  try {
+    dbtransacao = await connectToDatabase()
+    await dbtransacao.beginTransaction()
+    const {
+      familia_id,
+      autorizacao_id,
+      tipo_beneficio,
+      descricao_beneficio,
+      valor,
+      justificativa,
+      data_entrega,
+      observacoes,
+      force,
+    } = req.body
+
+    const responsavel_id = req.userId
+
+    // Campos obrigatorios
+    if (!familia_id || !tipo_beneficio || !justificativa) {
+      return res.status(400).json({ message: "Campos obrigatórios não preenchidos." })
+    }
+
+    if (autorizacao_id) {
+      const [autorizacao] = await dbtransacao.query(
+        `SELECT * FROM autorizacoes_beneficios 
+                 WHERE id = ? AND familia_id = ? AND status = 'ativa' 
+                 AND data_validade >= CURDATE() AND quantidade_utilizada < quantidade`,
+        [autorizacao_id, familia_id],
+      )
+
+      if (autorizacao.length === 0) {
+        return res.status(400).json({
+          message: "Autorização inválida, expirada ou já totalmente utilizada.",
+        })
+      }
+
+      // Verificar se o tipo de benefício corresponde
+      if (autorizacao[0].tipo_beneficio !== tipo_beneficio) {
+        return res.status(400).json({
+          message: "Tipo de benefício não corresponde à autorização.",
+        })
+      }
+    }
+
+    if (!force) {
+      const [existingBenefits] = await dbtransacao.query(
+        `SELECT b.id, b.tipo_beneficio, p_resp.nome_completo AS responsavel_familia_nome
+                 FROM beneficios b
+                 LEFT JOIN familias f ON b.familia_id = f.id
+                 LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
+                 WHERE
+                     b.familia_id = ? AND
+                     MONTH(b.data_entrega) = MONTH(CURDATE()) AND
+                     YEAR(b.data_entrega) = YEAR(CURDATE())
+                 LIMIT 1`,
+        [familia_id],
+      )
+
+      if (existingBenefits.length > 0) {
+        const { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente } = existingBenefits[0]
+        return res.status(409).json({
+          message: `ATENÇÃO: A família de ${responsavel_familia_nome || "um responsável"} já recebeu um benefício do tipo "${tipoBeneficioExistente}" este mês. Deseja registrar a entrega mesmo assim?`,
+          requiresConfirmation: true,
+          existingBenefit: { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente },
+        })
+      }
+    }
+
+    const sqlQuery = `
+            INSERT INTO beneficios (
+                familia_id, autorizacao_id, tipo_beneficio, descricao_beneficio, valor,
+                justificativa, responsavel_id, status, data_entrega, observacoes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+    const params = [
+      familia_id,
+      autorizacao_id || null,
+      tipo_beneficio,
+      descricao_beneficio || "",
+      valor || 0,
+      justificativa,
+      responsavel_id,
+      "entregue",
+      data_entrega,
+      observacoes || "",
+    ]
+
+    const [result] = await dbtransacao.query(sqlQuery, params)
+
+    if (autorizacao_id) {
+      await dbtransacao.query(
+        `UPDATE autorizacoes_beneficios 
+                 SET quantidade_utilizada = quantidade_utilizada + 1,
+                     updated_at = NOW()
+                 WHERE id = ?`,
+        [autorizacao_id],
+      )
+
+      // Verificar se deve marcar como utilizada
+      await dbtransacao.query(
+        `UPDATE autorizacoes_beneficios 
+                 SET status = 'utilizada'
+                 WHERE id = ? AND quantidade_utilizada >= quantidade`,
+        [autorizacao_id],
+      )
+    }
+
+    await dbtransacao.commit()
+    const beneficio_id = result.insertId
+
+    const [beneficioInserido] = await dbtransacao.query(
+      `
+            SELECT b.*, u.nome as responsavel_id, f.prontuario, p.nome_completo as responsavel_nome
+            FROM beneficios b
+            LEFT JOIN familias f ON b.familia_id = f.id
+            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+            LEFT JOIN usuarios u ON b.responsavel_id = u.id
+            WHERE b.id = ?
+        `,
+      [beneficio_id],
+    )
+
+    return res.status(201).json(beneficioInserido[0])
+  } catch (err) {
+    if (dbtransacao) {
+      await dbtransacao.rollback()
+    }
+    console.error("Erro ao registrar benefício:", err)
+    return res.status(500).json({ message: err.sqlMessage || err.message || "Erro interno do servidor" })
+  }
+})
+
+// Rota para buscar o HISTÓRICO de Benefícios
+router.get("/beneficios/historico", async (req, res) => {
+  try {
+    const db = await connectToDatabase()
+
+    const [results] = await db.query(`
+            SELECT
+                b.id, b.familia_id, b.tipo_beneficio, b.descricao_beneficio,
+                b.data_entrega, b.valor, b.justificativa, b.status,
+                b.observacoes,
+                COALESCE(p.nome_completo, 'Responsável não encontrado') as responsavel_nome,
+                COALESCE(f.prontuario, 'Prontuário não encontrado') as prontuario
+            FROM beneficios b
+            LEFT JOIN familias f ON b.familia_id = f.id
+            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+            ORDER BY b.data_entrega DESC, b.created_at DESC
+            LIMIT 100
+        `)
+
+    res.json(results)
+  } catch (error) {
+    console.error("Erro ao buscar histórico de benefícios:", error)
+    res.status(500).json({ message: "Erro ao buscar histórico", error: error.message })
+  }
+})
+
+// Atualizar rota de histórico completo
+router.get("/beneficios/historico-completo", async (req, res) => {
+  console.log("📋 Rota GET /beneficios/historico-completo chamada")
+
+  try {
+    const db = await connectToDatabase()
+
+    console.log("🔍 Buscando histórico completo...")
+
+    const [results] = await db.query(`
+                SELECT
+                    b.id,
+                    b.familia_id,
+                    b.tipo_beneficio,
+                    b.descricao_beneficio,
+                    b.valor,
+                    b.justificativa,
+                    b.status,
+                    b.data_entrega,
+                    b.observacoes,
+                    b.created_at,
+                    COALESCE(p.nome_completo, 'Nome não encontrado') as responsavel_nome,
+                    COALESCE(f.prontuario, 'Prontuário não encontrado') as prontuario,
+                    COALESCE(u.nome, 'Usuário não encontrado') as responsavel_id
+                FROM beneficios b
+                LEFT JOIN familias f ON b.familia_id = f.id
+                LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+                LEFT JOIN usuarios u ON b.responsavel_id = u.id
+                ORDER BY b.created_at DESC
+                LIMIT 50
+            `)
+
+    console.log("✅ Histórico completo encontrado:", results.length, "benefícios")
+
+    res.json(results)
+  } catch (error) {
+    console.error("❌ Erro ao buscar histórico completo:", error)
+    res.status(500).json({
+      message: "Erro ao buscar histórico completo",
+      error: error.message,
+    })
+  }
+})
+
+// Rota para Marcar Beneficio como entregue
+router.put("/beneficios/:id/entregar", async (req, res) => {
+  try {
+    const { id } = req.params
+
+    if (!id || isNaN(Number.parseInt(id)) || Number.parseInt(id) <= 0) {
+      return res.status(400).json({ message: "ID do benefício inválido." })
+    }
+
+    const db = await connectToDatabase()
+
+    const [result] = await db.query(
+      "UPDATE beneficios SET status = 'entregue', data_entrega = CURDATE() WHERE id = ?",
+      [id],
+    )
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Benefício não encontrado com o ID fornecido." })
+    }
+
+    return res.status(200).json({ message: "Benefício marcado como entregue com sucesso!" })
+  } catch (err) {
+    console.error("💥 ERRO AO ATUALIZAR BENEFÍCIO:", err)
+    return res.status(500).json({
+      message: err.sqlMessage || err.message || "Erro ao atualizar status do benefício",
+    })
+  }
+})
+
+// Rota para criar autorização de benefício (apenas técnicos e coordenadores)
+router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, res) => {
+  console.log("📝 Criando autorização de benefício para família:", req.params.id)
+
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+    const usuario_id = req.userId
+    const { tipo_beneficio, quantidade, validade_meses, justificativa, observacoes } = req.body
+
+    if (isNaN(familia_id)) {
+      return res.status(400).json({ message: "ID da família inválido" })
+    }
+
+    // Validações
+    if (!tipo_beneficio) {
+      return res.status(400).json({ message: "Tipo de benefício é obrigatório" })
+    }
+    if (!justificativa || justificativa.trim() === "") {
+      return res.status(400).json({ message: "Justificativa é obrigatória" })
+    }
+    if (!quantidade || quantidade < 1) {
+      return res.status(400).json({ message: "Quantidade deve ser maior que zero" })
+    }
+    if (!validade_meses || validade_meses < 1) {
+      return res.status(400).json({ message: "Validade deve ser maior que zero" })
+    }
+
+    // Verificar se o usuário é técnico (cargo_id = 3) ou coordenador (cargo_id = 2)
+    const [userResult] = await db.query("SELECT cargo_id FROM usuarios WHERE id = ?", [usuario_id])
+
+    if (userResult.length === 0 || (userResult[0].cargo_id !== 3 && userResult[0].cargo_id !== 2)) {
+      return res.status(403).json({
+        message: "Apenas técnicos e coordenadores podem autorizar benefícios",
+      })
+    }
+
+    // Verificar se a família existe
+    const [familiaResult] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
+
+    if (familiaResult.length === 0) {
+      return res.status(404).json({ message: "Família não encontrada" })
+    }
+
+    // Inserir a autorização
+    const data_autorizacao = new Date().toISOString().split("T")[0]
+    const data_validade = new Date()
+    data_validade.setMonth(data_validade.getMonth() + validade_meses)
+    const data_validade_formatada = data_validade.toISOString().split("T")[0]
+
+    const [result] = await db.query(
+      `
+            INSERT INTO autorizacoes_beneficios (
+                familia_id, 
+                tipo_beneficio, 
+                quantidade,
+                validade_meses,
+                data_autorizacao,
+                data_validade,
+                autorizador_id,
+                justificativa,
+                observacoes,
+                status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativa')
+        `,
+      [
+        familia_id,
+        tipo_beneficio,
+        quantidade,
+        validade_meses,
+        data_autorizacao,
+        data_validade_formatada,
+        usuario_id,
+        justificativa,
+        observacoes || "",
+      ],
+    )
+
+    console.log("✅ Autorização criada com ID:", result.insertId)
+
+    res.status(201).json({
+      message: "Benefício autorizado com sucesso",
+      id: result.insertId,
+    })
+  } catch (error) {
+    console.error("❌ Erro ao criar autorização:", error)
+    res.status(500).json({
+      message: "Erro ao autorizar benefício",
+      error: error.message,
+    })
+  }
+})
+
+// Rota para buscar autorizações de uma família
+router.get("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, res) => {
+  console.log("🔍 Buscando autorizações da família:", req.params.id)
+
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+
+    if (isNaN(familia_id)) {
+      return res.status(400).json({ message: "ID da família inválido" })
+    }
+
+    // Buscar todas as autorizações da família
+    const [autorizacoes] = await db.query(
+      `
+            SELECT 
+                a.*,
+                u.nome as autorizador_nome,
+                c.nome as autorizador_cargo
+            FROM autorizacoes_beneficios a
+            INNER JOIN usuarios u ON a.autorizador_id = u.id
+            INNER JOIN cargos c ON u.cargo_id = c.id
+            WHERE a.familia_id = ?
+            ORDER BY a.data_autorizacao DESC
+        `,
+      [familia_id],
+    )
+
+    // Atualizar status de autorizações expiradas
+    for (const autorizacao of autorizacoes) {
+      // Verifica se a data de validade é anterior à data atual e o status é 'ativa'
+      if (autorizacao.status === "ativa" && new Date(autorizacao.data_validade) < new Date()) {
+        await db.query("UPDATE autorizacoes_beneficios SET status = 'expirada' WHERE id = ?", [autorizacao.id])
+        autorizacao.status = "expirada"
+      }
+    }
+
+    console.log(`✅ ${autorizacoes.length} autorizações encontradas`)
+    res.json(autorizacoes)
+  } catch (error) {
+    console.error("❌ Erro ao buscar autorizações:", error)
+    res.status(500).json({
+      message: "Erro ao buscar autorizações",
+      error: error.message,
+    })
+  }
+})
+
+// Rota para buscar autorizações DISPONÍVEIS de uma família (para uso na tela de benefícios)
+router.get("/familias/:id/autorizacoes-beneficios/disponiveis", verifyToken, async (req, res) => {
+  console.log("🔍 Buscando autorizações disponíveis da família:", req.params.id)
+
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+
+    if (isNaN(familia_id)) {
+      return res.status(400).json({ message: "ID da família inválido" })
+    }
+
+    // Buscar apenas autorizações ativas e válidas
+    const [autorizacoes] = await db.query(
+      `
+            SELECT 
+                a.*,
+                u.nome as autorizador_nome,
+                c.nome as autorizador_cargo,
+                (a.quantidade - a.quantidade_utilizada) as quantidade_disponivel
+            FROM autorizacoes_beneficios a
+            INNER JOIN usuarios u ON a.autorizador_id = u.id
+            INNER JOIN cargos c ON u.cargo_id = c.id
+            WHERE a.familia_id = ?
+            AND a.status = 'ativa'
+            AND a.data_validade >= CURDATE()
+            AND a.quantidade_utilizada < a.quantidade
+            ORDER BY a.data_autorizacao DESC
+        `,
+      [familia_id],
+    )
+
+    console.log(`✅ ${autorizacoes.length} autorizações disponíveis encontradas`)
+    res.json(autorizacoes)
+  } catch (error) {
+    console.error("❌ Erro ao buscar autorizações disponíveis:", error)
+    res.status(500).json({
+      message: "Erro ao buscar autorizações disponíveis",
+      error: error.message,
+    })
+  }
+})
+
+router.get("/beneficios/historico/familia/:familia_id", verifyToken, async (req, res) => {
+  console.log("📋 Rota GET /beneficios/historico/familia/:familia_id chamada")
+
+  try {
+    const db = await connectToDatabase()
+    const familia_id = Number.parseInt(req.params.familia_id)
+
+    if (isNaN(familia_id)) {
+      return res.status(400).json({ message: "ID da família inválido" })
+    }
+
+    console.log(`🔍 Buscando histórico da família ${familia_id}...`)
+
+    const [results] = await db.query(
+      `
+                SELECT
+                    b.id,
+                    b.familia_id,
+                    b.tipo_beneficio,
+                    b.descricao_beneficio,
+                    b.valor,
+                    b.justificativa,
+                    b.status,
+                    b.data_entrega,
+                    b.observacoes,
+                    b.created_at,
+                    COALESCE(p.nome_completo, 'Nome não encontrado') as responsavel_nome,
+                    COALESCE(f.prontuario, 'Prontuário não encontrado') as prontuario,
+                    COALESCE(u.nome, 'Usuário não encontrado') as responsavel_id
+                FROM beneficios b
+                LEFT JOIN familias f ON b.familia_id = f.id
+                LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+                LEFT JOIN usuarios u ON b.responsavel_id = u.id
+                WHERE b.familia_id = ?
+                ORDER BY b.created_at DESC
+            `,
+      [familia_id],
+    )
+
+    console.log(`✅ Histórico da família encontrado: ${results.length} benefícios`)
+
+    res.json(results)
+  } catch (error) {
+    console.error("❌ Erro ao buscar histórico da família:", error)
+    res.status(500).json({
+      message: "Erro ao buscar histórico da família",
+      error: error.message,
+    })
+  }
+})
 
 export default router

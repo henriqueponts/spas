@@ -18,7 +18,6 @@ import { Separator } from "../components/ui/Separator"
 // --- ÍCONES (lucide-react) ---
 import {
   ChevronLeft,
-  Printer,
   User,
   Home,
   FileText,
@@ -31,9 +30,10 @@ import {
   Plus,
   X,
   Building,
-  Landmark,
+  Gift,
 } from "lucide-react"
 import Header from "../components/Header"
+import { gerarReciboAutorizacao } from "../pages/ReciboAutorizacao"
 
 // --- INTERFACES DE DADOS (Mantidas) ---
 interface Integrante {
@@ -127,6 +127,22 @@ interface Evolucao {
   usuario_cargo?: string
 }
 
+interface AutorizacaoBeneficio {
+  id: number
+  familia_id: number
+  tipo_beneficio: string
+  quantidade: number
+  validade_meses: number
+  data_autorizacao: string
+  data_validade: string
+  autorizador_id: number
+  autorizador_nome: string
+  evolucao_id: number | null
+  justificativa: string
+  observacoes: string
+  status: string
+}
+
 // --- COMPONENTE DE ITEM DE INFORMAÇÃO (Estilo compatível) ---
 const InfoItem: React.FC<{ label: string; value?: string | number | null; children?: React.ReactNode }> = ({
   label,
@@ -152,6 +168,18 @@ const VisualizarFamilia: React.FC = () => {
   const [mostrarFormEvolucao, setMostrarFormEvolucao] = useState(false)
   const [loadingEvolucao, setLoadingEvolucao] = useState(false)
   const isTecnico = user?.cargo_id === 3
+  const isCoordenador = user?.cargo_id === 2
+  const podeAutorizar = isTecnico || isCoordenador
+
+  const [autorizacoes, setAutorizacoes] = useState<AutorizacaoBeneficio[]>([])
+  const [mostrarFormAutorizacao, setMostrarFormAutorizacao] = useState(false)
+  const [dadosAutorizacao, setDadosAutorizacao] = useState({
+    tipo_beneficio: "",
+    quantidade: 1,
+    validade_meses: 1,
+    justificativa: "",
+    observacoes: "",
+  })
 
   // --- LÓGICA DE DADOS E FORMATAÇÃO (Mantida) ---
   useEffect(() => {
@@ -163,6 +191,12 @@ const VisualizarFamilia: React.FC = () => {
       carregarEvolucoes()
     }
   }, [id, isTecnico])
+
+  useEffect(() => {
+    if (id) {
+      carregarAutorizacoes()
+    }
+  }, [id])
 
   const carregarDadosFamilia = async () => {
     setLoading(true)
@@ -188,6 +222,15 @@ const VisualizarFamilia: React.FC = () => {
     }
   }
 
+  const carregarAutorizacoes = async () => {
+    try {
+      const response = await api.get(`/auth/familias/${id}/autorizacoes-beneficios`)
+      setAutorizacoes(response.data)
+    } catch (error) {
+      console.error("Erro ao carregar autorizações:", error)
+    }
+  }
+
   const salvarEvolucao = async () => {
     if (!novaEvolucao.trim()) {
       alert("Por favor, escreva uma descrição para a evolução.")
@@ -203,6 +246,65 @@ const VisualizarFamilia: React.FC = () => {
     } catch (error) {
       console.error("Erro ao salvar evolução:", error)
       alert("Erro ao salvar evolução. Tente novamente.")
+    } finally {
+      setLoadingEvolucao(false)
+    }
+  }
+
+  const autorizarBeneficio = async () => {
+    if (!dadosAutorizacao.tipo_beneficio) {
+      alert("Por favor, selecione o tipo de benefício.")
+      return
+    }
+    if (!dadosAutorizacao.justificativa.trim()) {
+      alert("Por favor, informe a justificativa.")
+      return
+    }
+
+    setLoadingEvolucao(true) // Reutilizando loadingEvolucao para simplificar, pois a lógica é similar
+    try {
+      const response = await api.post(`/auth/familias/${id}/autorizacoes-beneficios`, dadosAutorizacao)
+      const autorizacaoCriada = response.data
+
+      setDadosAutorizacao({
+        tipo_beneficio: "",
+        quantidade: 1,
+        validade_meses: 1,
+        justificativa: "",
+        observacoes: "",
+      })
+      setMostrarFormAutorizacao(false)
+      await carregarAutorizacoes()
+      alert("Benefício autorizado com sucesso!")
+
+      if (familia && user) {
+        gerarReciboAutorizacao({
+          familia: {
+            prontuario: familia.prontuario,
+            responsavel_nome: familia.responsavel.nome_completo,
+            responsavel_cpf: familia.responsavel.cpf,
+            endereco: `${familia.endereco.logradouro}, ${familia.endereco.numero || "S/N"}${familia.endereco.complemento ? ` - ${familia.endereco.complemento}` : ""} - ${familia.endereco.bairro}`,
+            cidade: familia.endereco.cidade,
+            uf: familia.endereco.uf,
+          },
+          autorizacao: {
+            tipo_beneficio: autorizacaoCriada.tipo_beneficio || dadosAutorizacao.tipo_beneficio,
+            quantidade: autorizacaoCriada.quantidade || dadosAutorizacao.quantidade,
+            validade_meses: autorizacaoCriada.validade_meses || dadosAutorizacao.validade_meses,
+            data_autorizacao: autorizacaoCriada.data_autorizacao || new Date().toISOString(),
+            data_validade: autorizacaoCriada.data_validade || new Date().toISOString(),
+            justificativa: autorizacaoCriada.justificativa || dadosAutorizacao.justificativa,
+            observacoes: autorizacaoCriada.observacoes || dadosAutorizacao.observacoes,
+          },
+          autorizador: {
+            nome: user.nome,
+            cargo: user.cargo_nome ?? "",
+          },
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao autorizar benefício:", error)
+      alert("Erro ao autorizar benefício. Tente novamente.")
     } finally {
       setLoadingEvolucao(false)
     }
@@ -267,6 +369,42 @@ const VisualizarFamilia: React.FC = () => {
       outro: "Outro",
     })[parentesco] || parentesco
 
+  const formatarTipoBeneficio = (tipo: string) => {
+    const tipos: Record<string, string> = {
+      cesta_basica: "Cesta Básica",
+      auxilio_funeral: "Auxílio Funeral",
+      auxilio_natalidade: "Auxílio Natalidade",
+      passagem: "Passagem",
+      outro: "Outro",
+    }
+    return tipos[tipo] || tipo
+  }
+
+  const formatarStatusAutorizacao = (status: string) => {
+    const statusMap: Record<string, string> = {
+      ativa: "Ativa",
+      utilizada: "Utilizada",
+      expirada: "Expirada",
+      cancelada: "Cancelada",
+    }
+    return statusMap[status] || status
+  }
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "ativa":
+        return "bg-green-100 text-green-800"
+      case "utilizada":
+        return "bg-blue-100 text-blue-800"
+      case "expirada":
+        return "bg-red-100 text-red-800"
+      case "cancelada":
+        return "bg-gray-100 text-gray-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
   // --- ESTADOS DE LOADING E ERRO ---
   if (loading) {
     return (
@@ -300,485 +438,650 @@ const VisualizarFamilia: React.FC = () => {
   // --- RENDERIZAÇÃO DO COMPONENTE ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <Header/>
+      <Header />
       <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="mb-6">
-        <Button variant="default" onClick={() => navigate("/familias")}>
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Voltar para a lista de famílias
-        </Button>
-      </div>
-
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">Prontuário Familiar</h1>
-          <p className="text-gray-600">{familia.responsavel.nome_completo}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="default" onClick={() => navigate(`/familia/${id}/editar`)}>
-            <Pencil className="h-4 w-4 mr-2" /> Editar
+        <div className="mb-6">
+          <Button variant="default" onClick={() => navigate("/familias")}>
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Voltar para a lista de famílias
           </Button>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <User className="h-5 w-5 mr-2 text-blue-600" />
-              Dados do Responsável
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-3">
-              <InfoItem label="Nome Completo" value={familia.responsavel.nome_completo} />
-              <InfoItem label="CPF" value={familia.responsavel.cpf} />
-              <InfoItem
-                label="Data de Nascimento"
-                value={`${formatarData(familia.responsavel.data_nascimento)} (${calcularIdade(familia.responsavel.data_nascimento)} anos)`}
-              />
-              <InfoItem label="Estado Civil" value={formatarEstadoCivil(familia.responsavel.estado_civil)} />
-              <InfoItem label="Escolaridade" value={formatarEscolaridade(familia.responsavel.escolaridade)} />
-              <InfoItem label="Telefone" value={familia.responsavel.telefone} />
-              <InfoItem label="NIS" value={familia.responsavel.nis} />
-            </dl>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+              Prontuário Familiar
+            </h1>
+            <p className="text-gray-600">{familia.responsavel.nome_completo}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="default" onClick={() => navigate(`/familia/${id}/editar`)}>
+              <Pencil className="h-4 w-4 mr-2" /> Editar
+            </Button>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Home className="h-5 w-5 mr-2 text-blue-600" />
-              Endereço
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-3">
-              <InfoItem
-                label="Logradouro"
-                value={`${familia.endereco.logradouro}, ${familia.endereco.numero || "S/N"}`}
-              />
-              <InfoItem label="Bairro" value={familia.endereco.bairro} />
-              <InfoItem label="Cidade/UF" value={`${familia.endereco.cidade}/${familia.endereco.uf}`} />
-              <InfoItem label="CEP" value={familia.endereco.cep} />
-              <InfoItem label="Referência" value={familia.endereco.referencia} />
-              <InfoItem label="Tempo de Moradia" value={familia.endereco.tempo_moradia} />
-            </dl>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <User className="h-5 w-5 mr-2 text-blue-600" />
+                Dados do Responsável
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-3">
+                <InfoItem label="Nome Completo" value={familia.responsavel.nome_completo} />
+                <InfoItem label="CPF" value={familia.responsavel.cpf} />
+                <InfoItem
+                  label="Data de Nascimento"
+                  value={`${formatarData(familia.responsavel.data_nascimento)} (${calcularIdade(familia.responsavel.data_nascimento)} anos)`}
+                />
+                <InfoItem label="Estado Civil" value={formatarEstadoCivil(familia.responsavel.estado_civil)} />
+                <InfoItem label="Escolaridade" value={formatarEscolaridade(familia.responsavel.escolaridade)} />
+                <InfoItem label="Telefone" value={familia.responsavel.telefone} />
+                <InfoItem label="NIS" value={familia.responsavel.nis} />
+              </dl>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <FileText className="h-5 w-5 mr-2 text-blue-600" />
-              Informações do Cadastro
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-3">
-              <InfoItem label="Unidade" value={`${familia.equipamento.nome} (${familia.equipamento.regiao})`} />
-              <InfoItem
-                label="Técnico Responsável"
-                value={`${familia.profissional.nome} (${familia.profissional.cargo_nome})`}
-              />
-              <InfoItem label="Data de Cadastro" value={formatarData(familia.data_cadastro)} />
-              <InfoItem label="Último Atendimento" value={formatarData(familia.data_atendimento)} />
-              <InfoItem label="Prontuário" value={familia.prontuario} />
-              <InfoItem label="Situação">
-                <Badge
-                  className={
-                    familia.situacao.toLowerCase() === "ativo"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }
-                >
-                  {familia.situacao}
-                </Badge>
-              </InfoItem>
-            </dl>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Home className="h-5 w-5 mr-2 text-blue-600" />
+                Endereço
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-3">
+                <InfoItem
+                  label="Logradouro"
+                  value={`${familia.endereco.logradouro}, ${familia.endereco.numero || "S/N"}`}
+                />
+                <InfoItem label="Bairro" value={familia.endereco.bairro} />
+                <InfoItem label="Cidade/UF" value={`${familia.endereco.cidade}/${familia.endereco.uf}`} />
+                <InfoItem label="CEP" value={familia.endereco.cep} />
+                <InfoItem label="Referência" value={familia.endereco.referencia} />
+                <InfoItem label="Tempo de Moradia" value={familia.endereco.tempo_moradia} />
+              </dl>
+            </CardContent>
+          </Card>
 
-      <Tabs defaultValue={isTecnico ? "evolucao" : "composicao"}>
-        <TabsList>
-          {isTecnico && <TabsTrigger value="evolucao">Evolução</TabsTrigger>}
-          <TabsTrigger value="composicao">Composição</TabsTrigger>
-          <TabsTrigger value="trabalho">Trabalho e Renda</TabsTrigger>
-          <TabsTrigger value="beneficios">Benefícios</TabsTrigger>
-          <TabsTrigger value="saude">Saúde</TabsTrigger>
-          <TabsTrigger value="habitacao">Habitação</TabsTrigger>
-          <TabsTrigger value="social">Situação Social</TabsTrigger>
-        </TabsList>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                Informações do Cadastro
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-3">
+                <InfoItem label="Unidade" value={`${familia.equipamento.nome} (${familia.equipamento.regiao})`} />
+                <InfoItem
+                  label="Técnico Responsável"
+                  value={`${familia.profissional.nome} (${familia.profissional.cargo_nome})`}
+                />
+                <InfoItem label="Data de Cadastro" value={formatarData(familia.data_cadastro)} />
+                <InfoItem label="Último Atendimento" value={formatarData(familia.data_atendimento)} />
+                <InfoItem label="Prontuário" value={familia.prontuario} />
+                <InfoItem label="Situação">
+                  <Badge
+                    className={
+                      familia.situacao.toLowerCase() === "ativo"
+                        ? "bg-green-100 text-green-800"
+                        : "bg-red-100 text-red-800"
+                    }
+                  >
+                    {familia.situacao}
+                  </Badge>
+                </InfoItem>
+              </dl>
+            </CardContent>
+          </Card>
+        </div>
 
-        {isTecnico && (
-          <TabsContent value="evolucao">
+        <Tabs defaultValue={isTecnico ? "evolucao" : "composicao"}>
+          <TabsList>
+            {isTecnico && <TabsTrigger value="evolucao">Evolução</TabsTrigger>}
+            <TabsTrigger value="composicao">Composição</TabsTrigger>
+            <TabsTrigger value="trabalho">Trabalho e Renda</TabsTrigger>
+            <TabsTrigger value="beneficios">Benefícios</TabsTrigger>
+            <TabsTrigger value="saude">Saúde</TabsTrigger>
+            <TabsTrigger value="habitacao">Habitação</TabsTrigger>
+            <TabsTrigger value="social">Situação Social</TabsTrigger>
+          </TabsList>
+
+          {isTecnico && (
+            <TabsContent value="evolucao">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle className="flex items-center">
+                        <Calendar className="h-5 w-5 mr-2 text-blue-600" />
+                        Evolução do Prontuário
+                      </CardTitle>
+                      <CardDescription>Histórico de atendimentos e evoluções técnicas.</CardDescription>
+                    </div>
+                    <Button onClick={() => setMostrarFormEvolucao(!mostrarFormEvolucao)}>
+                      {mostrarFormEvolucao ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                      {mostrarFormEvolucao ? "Cancelar" : "Nova Evolução"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {mostrarFormEvolucao && (
+                    <div className="p-4 bg-gray-50 rounded-lg border">
+                      <h4 className="font-medium mb-3 text-gray-900">Registrar Nova Evolução</h4>
+                      <textarea
+                        value={novaEvolucao}
+                        onChange={(e) => setNovaEvolucao(e.target.value)}
+                        placeholder="Descreva o atendimento realizado, encaminhamentos, observações..."
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        rows={4}
+                      />
+                      <div className="mt-3 flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setMostrarFormEvolucao(false)}
+                          disabled={loadingEvolucao}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button onClick={salvarEvolucao} disabled={loadingEvolucao}>
+                          {loadingEvolucao ? "Salvando..." : "Salvar Evolução"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <Separator />
+                  {evolucoes.length > 0 ? (
+                    <div className="space-y-4">
+                      {evolucoes.map((evolucao) => (
+                        <div key={evolucao.id} className="bg-gray-100 p-4 rounded-lg">
+                          <div className="space-y-2 w-full">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium flex items-center gap-2 text-gray-900">
+                                <User className="h-4 w-4" />
+                                {evolucao.usuario_nome || "Técnico"}
+                              </div>
+                              <div className="text-sm text-gray-500 flex items-center gap-2">
+                                <Calendar className="h-3 w-3" />
+                                {formatarData(evolucao.data_evolucao)}
+                                <Clock className="h-3 w-3 ml-2" />
+                                {evolucao.hora_evolucao.substring(0, 5)}
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-700 whitespace-pre-line">{evolucao.descricao}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-gray-500 py-8">Nenhuma evolução registrada para esta família.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          <TabsContent value="composicao">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-blue-600" />
+                  Composição Familiar
+                </CardTitle>
+                <CardDescription>Membros que compõem o núcleo familiar.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {familia.integrantes.length > 0 ? (
+                  familia.integrantes.map((integrante) => (
+                    <div key={integrante.id} className="bg-gray-100 p-4 rounded-lg">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                        <div>
+                          <h3 className="font-medium text-gray-900">{integrante.nome_completo}</h3>
+                          <p className="text-sm text-gray-600">
+                            {calcularIdade(integrante.data_nascimento)} anos - Renda:{" "}
+                            {formatarMoeda(integrante.renda_mensal)}
+                          </p>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Escolaridade: {formatarEscolaridade(integrante.escolaridade)}
+                          </p>
+                          <p className="text-sm text-gray-600">Ocupação: {integrante.ocupacao || "Não informado"}</p>
+                        </div>
+                        <Badge variant="outline" className="self-start md:self-center">
+                          {formatarParentesco(integrante.tipo_membro)}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-gray-500 py-8">
+                    Nenhum outro integrante cadastrado além do responsável.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="trabalho">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Briefcase className="h-5 w-5 mr-2 text-blue-600" />
+                  Trabalho e Renda
+                </CardTitle>
+                <CardDescription>Informações sobre as fontes de renda e despesas da família.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gray-100 p-4 rounded-lg space-y-2">
+                    <h4 className="font-semibold mb-2 text-gray-900">Fontes de Renda</h4>
+                    <div className="flex justify-between text-sm text-gray-700">
+                      <span>Renda do Trabalho:</span>{" "}
+                      <span className="font-medium text-gray-900">
+                        {formatarMoeda(familia.trabalho_renda.rendimento_total)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-700">
+                      <span>Programas Sociais:</span>{" "}
+                      <span className="font-medium text-gray-900">
+                        {formatarMoeda(familia.programas_sociais.reduce((t, p) => t + garantirNumero(p.valor), 0))}
+                      </span>
+                    </div>
+                    <Separator className="my-2" />
+                    <div className="flex justify-between font-bold text-gray-900">
+                      <span>Renda Total:</span>{" "}
+                      <span>
+                        {formatarMoeda(
+                          garantirNumero(familia.trabalho_renda.rendimento_total) +
+                            familia.programas_sociais.reduce((t, p) => t + garantirNumero(p.valor), 0),
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="bg-gray-100 p-4 rounded-lg space-y-2">
+                    <h4 className="font-semibold mb-2 text-gray-900">Despesas Mensais</h4>
+                    {familia.despesas.length > 0 ? (
+                      familia.despesas.map((d, i) => (
+                        <div key={i} className="flex justify-between text-sm text-gray-700">
+                          <span>{d.tipo_nome}:</span>{" "}
+                          <span className="font-medium text-gray-900">{formatarMoeda(d.valor)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-sm">Nenhuma despesa cadastrada.</p>
+                    )}
+                    <Separator className="my-2" />
+                    <div className="flex justify-between font-bold text-gray-900">
+                      <span>Total Despesas:</span>{" "}
+                      <span>{formatarMoeda(familia.despesas.reduce((t, d) => t + garantirNumero(d.valor), 0))}</span>
+                    </div>
+                  </div>
+                </div>
+                {familia.trabalho_renda.quem_trabalha && (
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Quem trabalha na casa?</h4>
+                    <p className="text-sm text-gray-700 whitespace-pre-line">{familia.trabalho_renda.quem_trabalha}</p>
+                  </div>
+                )}
+                {familia.trabalho_renda.observacoes && (
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Observações sobre Renda</h4>
+                    <p className="text-sm text-gray-700 whitespace-pre-line">{familia.trabalho_renda.observacoes}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="beneficios">
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle className="flex items-center">
-                      <Calendar className="h-5 w-5 mr-2 text-blue-600" />
-                      Evolução do Prontuário
+                      <Gift className="h-5 w-5 mr-2 text-blue-600" />
+                      Benefícios Autorizados
                     </CardTitle>
-                    <CardDescription>Histórico de atendimentos e evoluções técnicas.</CardDescription>
+                    <CardDescription>Autorizações de benefícios para esta família.</CardDescription>
                   </div>
-                  <Button onClick={() => setMostrarFormEvolucao(!mostrarFormEvolucao)}>
-                    {mostrarFormEvolucao ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                    {mostrarFormEvolucao ? "Cancelar" : "Nova Evolução"}
-                  </Button>
+                  {podeAutorizar && (
+                    <Button onClick={() => setMostrarFormAutorizacao(!mostrarFormAutorizacao)}>
+                      {mostrarFormAutorizacao ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                      {mostrarFormAutorizacao ? "Cancelar" : "Autorizar Benefício"}
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                {mostrarFormEvolucao && (
+                {mostrarFormAutorizacao && podeAutorizar && (
                   <div className="p-4 bg-gray-50 rounded-lg border">
-                    <h4 className="font-medium mb-3 text-gray-900">Registrar Nova Evolução</h4>
-                    <textarea
-                      value={novaEvolucao}
-                      onChange={(e) => setNovaEvolucao(e.target.value)}
-                      placeholder="Descreva o atendimento realizado, encaminhamentos, observações..."
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                      rows={4}
-                    />
+                    <h4 className="font-medium mb-3 text-gray-900">Autorizar Novo Benefício</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Benefício *</label>
+                        <select
+                          value={dadosAutorizacao.tipo_beneficio}
+                          onChange={(e) => setDadosAutorizacao({ ...dadosAutorizacao, tipo_beneficio: e.target.value })}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        >
+                          <option value="">Selecione...</option>
+                          <option value="cesta_basica">Cesta Básica</option>
+                          <option value="auxilio_funeral">Auxílio Funeral</option>
+                          <option value="auxilio_natalidade">Auxílio Natalidade</option>
+                          <option value="passagem">Passagem</option>
+                          <option value="outro">Outro</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={dadosAutorizacao.quantidade}
+                          onChange={(e) =>
+                            setDadosAutorizacao({
+                              ...dadosAutorizacao,
+                              quantidade: Number.parseInt(e.target.value) || 1,
+                            })
+                          }
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Validade (meses)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={dadosAutorizacao.validade_meses}
+                          onChange={(e) =>
+                            setDadosAutorizacao({
+                              ...dadosAutorizacao,
+                              validade_meses: Number.parseInt(e.target.value) || 1,
+                            })
+                          }
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Justificativa *</label>
+                        <textarea
+                          value={dadosAutorizacao.justificativa}
+                          onChange={(e) => setDadosAutorizacao({ ...dadosAutorizacao, justificativa: e.target.value })}
+                          placeholder="Descreva o motivo da autorização do benefício..."
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          rows={3}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <textarea
+                          value={dadosAutorizacao.observacoes}
+                          onChange={(e) => setDadosAutorizacao({ ...dadosAutorizacao, observacoes: e.target.value })}
+                          placeholder="Observações adicionais (opcional)..."
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          rows={2}
+                        />
+                      </div>
+                    </div>
                     <div className="mt-3 flex justify-end gap-2">
                       <Button
                         variant="outline"
-                        onClick={() => setMostrarFormEvolucao(false)}
+                        onClick={() => {
+                          setMostrarFormAutorizacao(false)
+                          setDadosAutorizacao({
+                            tipo_beneficio: "",
+                            quantidade: 1,
+                            validade_meses: 1,
+                            justificativa: "",
+                            observacoes: "",
+                          })
+                        }}
                         disabled={loadingEvolucao}
                       >
                         Cancelar
                       </Button>
-                      <Button onClick={salvarEvolucao} disabled={loadingEvolucao}>
-                        {loadingEvolucao ? "Salvando..." : "Salvar Evolução"}
+                      <Button onClick={autorizarBeneficio} disabled={loadingEvolucao}>
+                        {loadingEvolucao ? "Autorizando..." : "Autorizar Benefício"}
                       </Button>
                     </div>
                   </div>
                 )}
+
                 <Separator />
-                {evolucoes.length > 0 ? (
+
+                {autorizacoes.length > 0 ? (
                   <div className="space-y-4">
-                    {evolucoes.map((evolucao) => (
-                      <div key={evolucao.id} className="bg-gray-100 p-4 rounded-lg">
-                        <div className="space-y-2 w-full">
-                          <div className="flex items-center justify-between">
-                            <div className="font-medium flex items-center gap-2 text-gray-900">
-                              <User className="h-4 w-4" />
-                              {evolucao.usuario_nome || "Técnico"}
-                            </div>
-                            <div className="text-sm text-gray-500 flex items-center gap-2">
-                              <Calendar className="h-3 w-3" />
-                              {formatarData(evolucao.data_evolucao)}
-                              <Clock className="h-3 w-3 ml-2" />
-                              {evolucao.hora_evolucao.substring(0, 5)}
-                            </div>
+                    {autorizacoes.map((autorizacao) => (
+                      <div key={autorizacao.id} className="bg-gray-100 p-4 rounded-lg">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h4 className="font-semibold text-gray-900">
+                              {formatarTipoBeneficio(autorizacao.tipo_beneficio)}
+                            </h4>
+                            <p className="text-sm text-gray-600">
+                              Quantidade: {autorizacao.quantidade} | Validade: {autorizacao.validade_meses}{" "}
+                              {autorizacao.validade_meses === 1 ? "mês" : "meses"}
+                            </p>
                           </div>
-                          <p className="text-sm text-gray-700 whitespace-pre-line">{evolucao.descricao}</p>
+                          <Badge className={getStatusBadgeClass(autorizacao.status)}>
+                            {formatarStatusAutorizacao(autorizacao.status)}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <p>
+                            <span className="font-medium">Autorizado por:</span> {autorizacao.autorizador_nome}
+                          </p>
+                          <p>
+                            <span className="font-medium">Data:</span> {formatarData(autorizacao.data_autorizacao)}
+                          </p>
+                          <p>
+                            <span className="font-medium">Válido até:</span> {formatarData(autorizacao.data_validade)}
+                          </p>
+                          <p>
+                            <span className="font-medium">Justificativa:</span> {autorizacao.justificativa}
+                          </p>
+                          {autorizacao.observacoes && (
+                            <p>
+                              <span className="font-medium">Observações:</span> {autorizacao.observacoes}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-center text-gray-500 py-8">Nenhuma evolução registrada para esta família.</p>
+                  <div className="text-center py-8">
+                    <Gift className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500">Nenhum benefício autorizado para esta família.</p>
+                    {podeAutorizar && (
+                      <p className="text-sm text-gray-400 mt-1">
+                        Clique em "Autorizar Benefício" para adicionar uma autorização.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <Separator />
+
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-2">Programas Sociais Cadastrados</h4>
+                  {familia?.programas_sociais && familia.programas_sociais.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {familia.programas_sociais.map((p, i) => (
+                        <div key={i} className="bg-white p-3 rounded-lg flex justify-between items-center">
+                          <p className="font-medium text-gray-900">{p.programa_nome}</p>
+                          <p className="text-green-600 font-semibold">{formatarMoeda(p.valor)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-600 text-sm">Nenhum programa social cadastrado.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="saude">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Heart className="h-5 w-5 mr-2 text-blue-600" />
+                  Condições de Saúde
+                </CardTitle>
+                <CardDescription>Informações sobre a saúde dos membros da família.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Possui integrante com deficiência?</h4>
+                    <p className="text-sm text-gray-700">
+                      {familia.saude.tem_deficiencia
+                        ? `Sim (${familia.saude.deficiencia_qual || "Não especificado"})`
+                        : "Não"}
+                    </p>
+                  </div>
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Realiza tratamento de saúde?</h4>
+                    <p className="text-sm text-gray-700">
+                      {familia.saude.tem_tratamento_saude
+                        ? `Sim (${familia.saude.tratamento_qual || "Não especificado"})`
+                        : "Não"}
+                    </p>
+                  </div>
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Usa medicação contínua?</h4>
+                    <p className="text-sm text-gray-700">
+                      {familia.saude.usa_medicacao_continua
+                        ? `Sim (${familia.saude.medicacao_qual || "Não especificado"})`
+                        : "Não"}
+                    </p>
+                  </div>
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Tem dependente que necessita de cuidados?</h4>
+                    <p className="text-sm text-gray-700">
+                      {familia.saude.tem_dependente_cuidados
+                        ? `Sim (${familia.saude.dependente_quem || "Não especificado"})`
+                        : "Não"}
+                    </p>
+                  </div>
+                </div>
+                {familia.saude.observacoes && (
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Observações</h4>
+                    <p className="text-sm text-gray-700 whitespace-pre-line">{familia.saude.observacoes}</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
-        )}
 
-        <TabsContent value="composicao">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Users className="h-5 w-5 mr-2 text-blue-600" />
-                Composição Familiar
-              </CardTitle>
-              <CardDescription>Membros que compõem o núcleo familiar.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {familia.integrantes.length > 0 ? (
-                familia.integrantes.map((integrante) => (
-                  <div key={integrante.id} className="bg-gray-100 p-4 rounded-lg">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                      <div>
-                        <h3 className="font-medium text-gray-900">{integrante.nome_completo}</h3>
-                        <p className="text-sm text-gray-600">
-                          {calcularIdade(integrante.data_nascimento)} anos - Renda:{" "}
-                          {formatarMoeda(integrante.renda_mensal)}
-                        </p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Escolaridade: {formatarEscolaridade(integrante.escolaridade)}
-                        </p>
-                        <p className="text-sm text-gray-600">Ocupação: {integrante.ocupacao || "Não informado"}</p>
-                      </div>
-                      <Badge variant="outline" className="self-start md:self-center">
-                        {formatarParentesco(integrante.tipo_membro)}
-                      </Badge>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-center text-gray-500 py-8">
-                  Nenhum outro integrante cadastrado além do responsável.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="trabalho">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Briefcase className="h-5 w-5 mr-2 text-blue-600" />
-                Trabalho e Renda
-              </CardTitle>
-              <CardDescription>Informações sobre as fontes de renda e despesas da família.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gray-100 p-4 rounded-lg space-y-2">
-                  <h4 className="font-semibold mb-2 text-gray-900">Fontes de Renda</h4>
-                  <div className="flex justify-between text-sm text-gray-700">
-                    <span>Renda do Trabalho:</span>{" "}
-                    <span className="font-medium text-gray-900">
-                      {formatarMoeda(familia.trabalho_renda.rendimento_total)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-700">
-                    <span>Programas Sociais:</span>{" "}
-                    <span className="font-medium text-gray-900">
-                      {formatarMoeda(familia.programas_sociais.reduce((t, p) => t + garantirNumero(p.valor), 0))}
-                    </span>
-                  </div>
-                  <Separator className="my-2" />
-                  <div className="flex justify-between font-bold text-gray-900">
-                    <span>Renda Total:</span>{" "}
-                    <span>
-                      {formatarMoeda(
-                        garantirNumero(familia.trabalho_renda.rendimento_total) +
-                          familia.programas_sociais.reduce((t, p) => t + garantirNumero(p.valor), 0),
-                      )}
-                    </span>
-                  </div>
-                </div>
-                <div className="bg-gray-100 p-4 rounded-lg space-y-2">
-                  <h4 className="font-semibold mb-2 text-gray-900">Despesas Mensais</h4>
-                  {familia.despesas.length > 0 ? (
-                    familia.despesas.map((d, i) => (
-                      <div key={i} className="flex justify-between text-sm text-gray-700">
-                        <span>{d.tipo_nome}:</span>{" "}
-                        <span className="font-medium text-gray-900">{formatarMoeda(d.valor)}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 text-sm">Nenhuma despesa cadastrada.</p>
-                  )}
-                  <Separator className="my-2" />
-                  <div className="flex justify-between font-bold text-gray-900">
-                    <span>Total Despesas:</span>{" "}
-                    <span>{formatarMoeda(familia.despesas.reduce((t, d) => t + garantirNumero(d.valor), 0))}</span>
-                  </div>
-                </div>
-              </div>
-              {familia.trabalho_renda.quem_trabalha && (
+          <TabsContent value="habitacao">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Building className="h-5 w-5 mr-2 text-blue-600" />
+                  Condição Habitacional
+                </CardTitle>
+                <CardDescription>Informações sobre a moradia da família.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Quem trabalha na casa?</h4>
-                  <p className="text-sm text-gray-700 whitespace-pre-line">{familia.trabalho_renda.quem_trabalha}</p>
+                  <h4 className="font-medium text-gray-900">Cômodos</h4>
+                  <p className="text-gray-700">{familia.habitacao.qtd_comodos}</p>
                 </div>
-              )}
-              {familia.trabalho_renda.observacoes && (
                 <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Observações sobre Renda</h4>
-                  <p className="text-sm text-gray-700 whitespace-pre-line">{familia.trabalho_renda.observacoes}</p>
+                  <h4 className="font-medium text-gray-900">Dormitórios</h4>
+                  <p className="text-gray-700">{familia.habitacao.qtd_dormitorios}</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                <div className="bg-gray-100 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-900">Energia</h4>
+                  <p className="capitalize text-gray-700">{familia.habitacao.energia_eletrica.replace("_", " ")}</p>
+                </div>
+                <div className="bg-gray-100 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-900">Água</h4>
+                  <p className="capitalize text-gray-700">{familia.habitacao.agua.replace("_", " ")}</p>
+                </div>
+                <div className="bg-gray-100 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-900">Esgoto</h4>
+                  <p className="capitalize text-gray-700">{familia.habitacao.esgoto.replace("_", " ")}</p>
+                </div>
+                <div className="bg-gray-100 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-900">Coleta de Lixo</h4>
+                  <p className="text-gray-700">{familia.habitacao.coleta_lixo ? "Sim" : "Não"}</p>
+                </div>
+                <div className="bg-gray-100 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-900">Área de Conflito</h4>
+                  <p className="text-gray-700">{familia.habitacao.area_conflito ? "Sim" : "Não"}</p>
+                </div>
+                <div className="bg-gray-100 p-4 rounded-lg col-span-2 md:col-span-1">
+                  <h4 className="font-medium text-gray-900">Tipo de Construção</h4>
+                  <p className="capitalize text-gray-700">{familia.habitacao.tipo_construcao.join(", ") || "N/A"}</p>
+                </div>
+                <div className="bg-gray-100 p-4 rounded-lg col-span-2 md:col-span-2">
+                  <h4 className="font-medium text-gray-900">Condição do Domicílio</h4>
+                  <p className="capitalize text-gray-700">
+                    {familia.habitacao.condicao_domicilio.map((c) => c.replace(/_/g, " ")).join(", ") || "N/A"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <TabsContent value="beneficios">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Landmark className="h-5 w-5 mr-2 text-blue-600" />
-                Programas Sociais / Benefícios
-              </CardTitle>
-              <CardDescription>Detalhes dos programas sociais e benefícios que a família recebe.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {familia.programas_sociais.length > 0 ? (
+          <TabsContent value="social">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-blue-600" />
+                  Situação Social
+                </CardTitle>
+                <CardDescription>Informações sobre a participação social e comunitária da família.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {familia.programas_sociais.map((p, i) => (
-                    <div key={i} className="bg-gray-100 p-4 rounded-lg flex justify-between items-center">
-                      <p className="font-medium text-gray-900">{p.programa_nome}</p>
-                      <p className="text-green-600 font-semibold">{formatarMoeda(p.valor)}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-gray-500 py-8">Nenhum programa social cadastrado para esta família.</p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="saude">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Heart className="h-5 w-5 mr-2 text-blue-600" />
-                Condições de Saúde
-              </CardTitle>
-              <CardDescription>Informações sobre a saúde dos membros da família.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Possui integrante com deficiência?</h4>
-                  <p className="text-sm text-gray-700">
-                    {familia.saude.tem_deficiencia
-                      ? `Sim (${familia.saude.deficiencia_qual || "Não especificado"})`
-                      : "Não"}
-                  </p>
-                </div>
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Realiza tratamento de saúde?</h4>
-                  <p className="text-sm text-gray-700">
-                    {familia.saude.tem_tratamento_saude
-                      ? `Sim (${familia.saude.tratamento_qual || "Não especificado"})`
-                      : "Não"}
-                  </p>
-                </div>
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Usa medicação contínua?</h4>
-                  <p className="text-sm text-gray-700">
-                    {familia.saude.usa_medicacao_continua
-                      ? `Sim (${familia.saude.medicacao_qual || "Não especificado"})`
-                      : "Não"}
-                  </p>
-                </div>
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Tem dependente que necessita de cuidados?</h4>
-                  <p className="text-sm text-gray-700">
-                    {familia.saude.tem_dependente_cuidados
-                      ? `Sim (${familia.saude.dependente_quem || "Não especificado"})`
-                      : "Não"}
-                  </p>
-                </div>
-              </div>
-              {familia.saude.observacoes && (
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Observações</h4>
-                  <p className="text-sm text-gray-700 whitespace-pre-line">{familia.saude.observacoes}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="habitacao">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Building className="h-5 w-5 mr-2 text-blue-600" />
-                Condição Habitacional
-              </CardTitle>
-              <CardDescription>Informações sobre a moradia da família.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900">Cômodos</h4>
-                <p className="text-gray-700">{familia.habitacao.qtd_comodos}</p>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900">Dormitórios</h4>
-                <p className="text-gray-700">{familia.habitacao.qtd_dormitorios}</p>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900">Energia</h4>
-                <p className="capitalize text-gray-700">{familia.habitacao.energia_eletrica.replace("_", " ")}</p>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900">Água</h4>
-                <p className="capitalize text-gray-700">{familia.habitacao.agua.replace("_", " ")}</p>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900">Esgoto</h4>
-                <p className="capitalize text-gray-700">{familia.habitacao.esgoto.replace("_", " ")}</p>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900">Coleta de Lixo</h4>
-                <p className="text-gray-700">{familia.habitacao.coleta_lixo ? "Sim" : "Não"}</p>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900">Área de Conflito</h4>
-                <p className="text-gray-700">{familia.habitacao.area_conflito ? "Sim" : "Não"}</p>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg col-span-2 md:col-span-1">
-                <h4 className="font-medium text-gray-900">Tipo de Construção</h4>
-                <p className="capitalize text-gray-700">{familia.habitacao.tipo_construcao.join(", ") || "N/A"}</p>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg col-span-2 md:col-span-2">
-                <h4 className="font-medium text-gray-900">Condição do Domicílio</h4>
-                <p className="capitalize text-gray-700">
-                  {familia.habitacao.condicao_domicilio.map((c) => c.replace(/_/g, " ")).join(", ") || "N/A"}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="social">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Users className="h-5 w-5 mr-2 text-blue-600" />
-                Situação Social
-              </CardTitle>
-              <CardDescription>Informações sobre a participação social e comunitária da família.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Participa de grupo religioso?</h4>
-                  <p className="text-sm text-gray-700">
-                    {familia.situacao_social.participa_religiao
-                      ? `Sim (${familia.situacao_social.religiao_qual || "Não especificado"})`
-                      : "Não"}
-                  </p>
-                </div>
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Participa de ação social?</h4>
-                  <p className="text-sm text-gray-700">
-                    {familia.situacao_social.participa_acao_social
-                      ? `Sim (${familia.situacao_social.acao_social_qual || "Não especificado"})`
-                      : "Não"}
-                  </p>
-                </div>
-              </div>
-              {familia.situacao_social.servicos_publicos.length > 0 && (
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-2 text-gray-900">Acesso a Serviços Públicos</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {familia.situacao_social.servicos_publicos.map((s, i) => (
-                      <Badge key={i} variant="default" className="capitalize">
-                        {s.replace(/_/g, " ")}
-                      </Badge>
-                    ))}
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Participa de grupo religioso?</h4>
+                    <p className="text-sm text-gray-700">
+                      {familia.situacao_social.participa_religiao
+                        ? `Sim (${familia.situacao_social.religiao_qual || "Não especificado"})`
+                        : "Não"}
+                    </p>
+                  </div>
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Participa de ação social?</h4>
+                    <p className="text-sm text-gray-700">
+                      {familia.situacao_social.participa_acao_social
+                        ? `Sim (${familia.situacao_social.acao_social_qual || "Não especificado"})`
+                        : "Não"}
+                    </p>
                   </div>
                 </div>
-              )}
-              {familia.situacao_social.observacoes && (
-                <div className="bg-gray-100 p-4 rounded-lg">
-                  <h4 className="font-medium mb-1 text-gray-900">Observações</h4>
-                  <p className="text-sm text-gray-700 whitespace-pre-line">{familia.situacao_social.observacoes}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+                {familia.situacao_social.servicos_publicos.length > 0 && (
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-2 text-gray-900">Acesso a Serviços Públicos</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {familia.situacao_social.servicos_publicos.map((s, i) => (
+                        <Badge key={i} variant="default" className="capitalize">
+                          {s.replace(/_/g, " ")}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {familia.situacao_social.observacoes && (
+                  <div className="bg-gray-100 p-4 rounded-lg">
+                    <h4 className="font-medium mb-1 text-gray-900">Observações</h4>
+                    <p className="text-sm text-gray-700 whitespace-pre-line">{familia.situacao_social.observacoes}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }
