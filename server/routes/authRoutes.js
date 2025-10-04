@@ -1554,6 +1554,93 @@ router.post("/familias/:id/evolucoes", verifyToken, async (req, res) => {
   }
 })
 
+router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
+  console.log("📤 Criando encaminhamentos para família:", req.params.id)
+
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+    const usuario_id = req.userId // ID do usuário autenticado (responsável)
+    const { evolucao_id, locais_ids } = req.body
+
+    if (isNaN(familia_id)) {
+      return res.status(400).json({ message: "ID da família inválido" })
+    }
+
+    if (!locais_ids || !Array.isArray(locais_ids) || locais_ids.length === 0) {
+      return res.status(400).json({ message: "Lista de locais é obrigatória" })
+    }
+
+    // Verificar se a família existe
+    const [familiaResult] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
+
+    if (familiaResult.length === 0) {
+      return res.status(404).json({ message: "Família não encontrada" })
+    }
+
+    // Se evolucao_id foi fornecido, verificar se existe
+    if (evolucao_id) {
+      const [evolucaoResult] = await db.query("SELECT id FROM evolucoes WHERE id = ? AND familia_id = ?", [
+        evolucao_id,
+        familia_id,
+      ])
+
+      if (evolucaoResult.length === 0) {
+        return res.status(404).json({ message: "Evolução não encontrada" })
+      }
+    }
+
+    // Data atual para o encaminhamento
+    const data_encaminhamento = new Date().toISOString().split("T")[0] // YYYY-MM-DD
+
+    // Inserir cada encaminhamento
+    const encaminhamentosCriados = []
+
+    for (const local_id of locais_ids) {
+      // Verificar se o local existe
+      const [localResult] = await db.query("SELECT id FROM local_encaminhamento WHERE id = ?", [local_id])
+
+      if (localResult.length === 0) {
+        console.warn(`⚠️ Local de encaminhamento ${local_id} não encontrado, pulando...`)
+        continue
+      }
+
+      // Inserir o encaminhamento
+      const [result] = await db.query(
+        `
+                INSERT INTO encaminhamentos (
+                    familia_id,
+                    evolucao_id,
+                    local_encaminhamento_id,
+                    data_encaminhamento,
+                    responsavel_id
+                ) VALUES (?, ?, ?, ?, ?)
+            `,
+        [familia_id, evolucao_id || null, local_id, data_encaminhamento, usuario_id],
+      )
+
+      encaminhamentosCriados.push({
+        id: result.insertId,
+        local_id,
+      })
+
+      console.log(`✅ Encaminhamento criado com ID: ${result.insertId} para local ${local_id}`)
+    }
+
+    res.status(201).json({
+      message: "Encaminhamentos registrados com sucesso",
+      encaminhamentos: encaminhamentosCriados,
+    })
+  } catch (error) {
+    console.error("❌ Erro ao criar encaminhamentos:", error)
+    res.status(500).json({
+      message: "Erro ao registrar encaminhamentos",
+      error: error.message,
+    })
+  }
+})
+
 router.get("/usuarios", verifyToken, async (req, res) => {
   // ADICIONE ESTES LOGS
   console.log("===========================================")
@@ -2206,6 +2293,224 @@ router.get("/beneficios/historico/familia/:familia_id", verifyToken, async (req,
     console.error("❌ Erro ao buscar histórico da família:", error)
     res.status(500).json({
       message: "Erro ao buscar histórico da família",
+      error: error.message,
+    })
+  }
+})
+
+// ============================================
+// ROTAS DE LOCAIS DE ENCAMINHAMENTO
+// ============================================
+
+// Listar todos os locais de encaminhamento ativos
+router.get("/locais-encaminhamento", verifyToken, async (req, res) => {
+  console.log("📋 Listando locais de encaminhamento")
+
+  const db = await connectToDatabase()
+
+  try {
+    const [locais] = await db.query(
+      `
+            SELECT id, nome, created_at, updated_at
+            FROM local_encaminhamento
+            ORDER BY nome ASC
+        `,
+    )
+
+    console.log(`✅ ${locais.length} locais encontrados`)
+    res.json(locais)
+  } catch (error) {
+    console.error("❌ Erro ao buscar locais de encaminhamento:", error)
+    res.status(500).json({
+      message: "Erro ao buscar locais de encaminhamento",
+      error: error.message,
+    })
+  }
+})
+
+// Criar novo local de encaminhamento
+router.post("/locais-encaminhamento", verifyToken, async (req, res) => {
+  console.log("📝 Criando novo local de encaminhamento")
+
+  const db = await connectToDatabase()
+
+  try {
+    const { nome } = req.body
+
+    if (!nome || nome.trim() === "") {
+      return res.status(400).json({ message: "Nome do local é obrigatório" })
+    }
+
+    // Verificar se o usuário é técnico (cargo_id = 3)
+    const [userResult] = await db.query("SELECT cargo_id FROM usuarios WHERE id = ?", [req.userId])
+
+    if (userResult.length === 0 || userResult[0].cargo_id !== 3) {
+      return res.status(403).json({
+        message: "Apenas técnicos podem cadastrar locais de encaminhamento",
+      })
+    }
+
+    // Verificar se já existe um local com esse nome
+    const [localExistente] = await db.query("SELECT id FROM local_encaminhamento WHERE nome = ?", [
+      nome.trim(),
+    ])
+
+    if (localExistente.length > 0) {
+      return res.status(400).json({ message: "Já existe um local com esse nome" })
+    }
+
+    // Inserir o novo local
+    const [result] = await db.query(
+      `
+            INSERT INTO local_encaminhamento (nome) 
+            VALUES (?)
+        `,
+      [nome.trim()],
+    )
+
+    console.log("✅ Local criado com ID:", result.insertId)
+
+    res.status(201).json({
+      message: "Local de encaminhamento cadastrado com sucesso",
+      id: result.insertId,
+      nome: nome.trim(),
+    })
+  } catch (error) {
+    console.error("❌ Erro ao criar local de encaminhamento:", error)
+    res.status(500).json({
+      message: "Erro ao cadastrar local de encaminhamento",
+      error: error.message,
+    })
+  }
+})
+
+// ============================================
+// ROTAS DE ENCAMINHAMENTOS
+// ============================================
+
+// Buscar encaminhamentos de uma família
+router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
+  console.log("🔍 Buscando encaminhamentos da família:", req.params.id)
+
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+
+    if (isNaN(familia_id)) {
+      return res.status(400).json({ message: "ID da família inválido" })
+    }
+
+    // Buscar encaminhamentos com informações do local e responsável
+    const [encaminhamentos] = await db.query(
+      `
+            SELECT 
+                e.id,
+                e.familia_id,
+                e.evolucao_id,
+                e.data_encaminhamento,
+                l.nome as local_nome,
+                u.nome as responsavel_nome,
+                e.created_at
+            FROM encaminhamentos e
+            JOIN local_encaminhamento l ON e.local_encaminhamento_id = l.id
+            JOIN usuarios u ON e.responsavel_id = u.id
+            WHERE e.familia_id = ?
+            ORDER BY e.data_encaminhamento DESC, e.created_at DESC
+        `,
+      [familia_id],
+    )
+
+    console.log(`✅ ${encaminhamentos.length} encaminhamentos encontrados`)
+    res.json(encaminhamentos)
+  } catch (error) {
+    console.error("❌ Erro ao buscar encaminhamentos:", error)
+    res.status(500).json({
+      message: "Erro ao buscar encaminhamentos",
+      error: error.message,
+    })
+  }
+})
+
+// Criar encaminhamentos vinculados a uma evolução
+router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
+  console.log("📝 Criando encaminhamentos para família:", req.params.id)
+
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+    const usuario_id = req.userId
+    const { evolucao_id, locais_ids } = req.body
+
+    if (isNaN(familia_id)) {
+      return res.status(400).json({ message: "ID da família inválido" })
+    }
+
+    if (!locais_ids || !Array.isArray(locais_ids) || locais_ids.length === 0) {
+      return res.status(400).json({ message: "Selecione pelo menos um local de encaminhamento" })
+    }
+
+    // Verificar se o usuário é técnico (cargo_id = 3)
+    const [userResult] = await db.query("SELECT cargo_id FROM usuarios WHERE id = ?", [usuario_id])
+
+    if (userResult.length === 0 || userResult[0].cargo_id !== 3) {
+      return res.status(403).json({
+        message: "Apenas técnicos podem registrar encaminhamentos",
+      })
+    }
+
+    // Verificar se a família existe
+    const [familiaResult] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
+
+    if (familiaResult.length === 0) {
+      return res.status(404).json({ message: "Família não encontrada" })
+    }
+
+    // Verificar se a evolução existe (se foi fornecida)
+    if (evolucao_id) {
+      const [evolucaoResult] = await db.query("SELECT id FROM evolucoes WHERE id = ? AND familia_id = ?", [
+        evolucao_id,
+        familia_id,
+      ])
+
+      if (evolucaoResult.length === 0) {
+        return res.status(404).json({ message: "Evolução não encontrada" })
+      }
+    }
+
+    const data_encaminhamento = new Date().toISOString().split("T")[0]
+
+    // Inserir os encaminhamentos
+    const encaminhamentosInseridos = []
+
+    for (const local_id of locais_ids) {
+      const [result] = await db.query(
+        `
+                INSERT INTO encaminhamentos (
+                    familia_id,
+                    evolucao_id,
+                    local_encaminhamento_id,
+                    data_encaminhamento,
+                    responsavel_id
+                ) VALUES (?, ?, ?, ?, ?)
+            `,
+        [familia_id, evolucao_id || null, local_id, data_encaminhamento, usuario_id],
+      )
+
+      encaminhamentosInseridos.push(result.insertId)
+    }
+
+    console.log("✅ Encaminhamentos criados:", encaminhamentosInseridos)
+
+    res.status(201).json({
+      message: "Encaminhamentos registrados com sucesso",
+      ids: encaminhamentosInseridos,
+    })
+  } catch (error) {
+    console.error("❌ Erro ao criar encaminhamentos:", error)
+    res.status(500).json({
+      message: "Erro ao registrar encaminhamentos",
       error: error.message,
     })
   }
