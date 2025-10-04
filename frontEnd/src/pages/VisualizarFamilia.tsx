@@ -184,8 +184,12 @@ const VisualizarFamilia: React.FC = () => {
   const [novaEvolucao, setNovaEvolucao] = useState("")
   const [mostrarFormEvolucao, setMostrarFormEvolucao] = useState(false)
   const [loadingEvolucao, setLoadingEvolucao] = useState(false)
+
   const isTecnico = user?.cargo_id === 3
   const isCoordenador = user?.cargo_id === 2
+  const isDiretor = user?.cargo_id === 1
+  const podeVisualizarEvolucao = isTecnico || isCoordenador || isDiretor
+  const podeCadastrarEvolucao = isTecnico || isCoordenador
   const podeAutorizar = isTecnico || isCoordenador
 
   const [locaisEncaminhamento, setLocaisEncaminhamento] = useState<LocalEncaminhamento[]>([])
@@ -206,23 +210,23 @@ const VisualizarFamilia: React.FC = () => {
     observacoes: "",
   })
 
-  // --- LÓGICA DE DADOS E FORMATAÇÃO (Mantida) ---
+  // --- LÓGICA DE DADOS E FORMATÇÃO (Mantida) ---
   useEffect(() => {
     if (id) carregarDadosFamilia()
   }, [id])
 
   useEffect(() => {
-    if (id && isTecnico) {
+    if (id && podeVisualizarEvolucao) {
       carregarEvolucoes()
       carregarLocaisEncaminhamento()
     }
-  }, [id, isTecnico])
+  }, [id, podeVisualizarEvolucao])
 
   useEffect(() => {
-    if (id) {
+    if (id && podeVisualizarEvolucao) {
       carregarEncaminhamentos()
     }
-  }, [id])
+  }, [id, podeVisualizarEvolucao])
 
   useEffect(() => {
     if (id) {
@@ -649,10 +653,10 @@ const VisualizarFamilia: React.FC = () => {
           </Card>
         </div>
 
-        <Tabs defaultValue={isTecnico ? "evolucao" : "composicao"}>
+        <Tabs defaultValue={podeVisualizarEvolucao ? "evolucao" : "composicao"}>
           <TabsList>
-            {isTecnico && <TabsTrigger value="evolucao">Evolução</TabsTrigger>}
-            <TabsTrigger value="encaminhamentos">Encaminhamentos</TabsTrigger>
+            {podeVisualizarEvolucao && <TabsTrigger value="evolucao">Evolução</TabsTrigger>}
+            {podeVisualizarEvolucao && <TabsTrigger value="encaminhamentos">Encaminhamentos</TabsTrigger>}
             <TabsTrigger value="composicao">Composição</TabsTrigger>
             <TabsTrigger value="trabalho">Trabalho e Renda</TabsTrigger>
             <TabsTrigger value="beneficios">Benefícios</TabsTrigger>
@@ -661,7 +665,7 @@ const VisualizarFamilia: React.FC = () => {
             <TabsTrigger value="social">Situação Social</TabsTrigger>
           </TabsList>
 
-          {isTecnico && (
+          {podeVisualizarEvolucao && (
             <TabsContent value="evolucao">
               <Card>
                 <CardHeader>
@@ -673,14 +677,16 @@ const VisualizarFamilia: React.FC = () => {
                       </CardTitle>
                       <CardDescription>Histórico de atendimentos e evoluções técnicas.</CardDescription>
                     </div>
-                    <Button onClick={() => setMostrarFormEvolucao(!mostrarFormEvolucao)}>
-                      {mostrarFormEvolucao ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                      {mostrarFormEvolucao ? "Cancelar" : "Nova Evolução"}
-                    </Button>
+                    {podeCadastrarEvolucao && (
+                      <Button onClick={() => setMostrarFormEvolucao(!mostrarFormEvolucao)}>
+                        {mostrarFormEvolucao ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                        {mostrarFormEvolucao ? "Cancelar" : "Nova Evolução"}
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {mostrarFormEvolucao && (
+                  {mostrarFormEvolucao && podeCadastrarEvolucao && (
                     <div className="p-4 bg-gray-50 rounded-lg border">
                       <h4 className="font-medium mb-3 text-gray-900">Registrar Nova Evolução</h4>
                       <textarea
@@ -847,51 +853,57 @@ const VisualizarFamilia: React.FC = () => {
             </TabsContent>
           )}
 
-          <TabsContent value="encaminhamentos">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <FileText className="h-5 w-5 mr-2 text-blue-600" />
-                  Encaminhamentos da Família
-                </CardTitle>
-                <CardDescription>Histórico de encaminhamentos realizados para serviços e instituições.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {encaminhamentos.length > 0 ? (
-                  <div className="space-y-4">
-                    {encaminhamentos.map((encaminhamento) => (
-                      <div key={encaminhamento.id} className="bg-gray-100 p-4 rounded-lg">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="default" className="text-sm">
-                              {encaminhamento.local_nome}
-                            </Badge>
+          {podeVisualizarEvolucao && (
+            <TabsContent value="encaminhamentos">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                    Encaminhamentos da Família
+                  </CardTitle>
+                  <CardDescription>
+                    Histórico de encaminhamentos realizados para serviços e instituições.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {encaminhamentos.length > 0 ? (
+                    <div className="space-y-4">
+                      {encaminhamentos.map((encaminhamento) => (
+                        <div key={encaminhamento.id} className="bg-gray-100 p-4 rounded-lg">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="default" className="text-sm">
+                                {encaminhamento.local_nome}
+                              </Badge>
+                            </div>
+                            <div className="text-sm text-gray-500 flex items-center gap-2">
+                              <Calendar className="h-3 w-3" />
+                              {formatarData(encaminhamento.data_encaminhamento)}
+                            </div>
                           </div>
-                          <div className="text-sm text-gray-500 flex items-center gap-2">
-                            <Calendar className="h-3 w-3" />
-                            {formatarData(encaminhamento.data_encaminhamento)}
+                          <div className="text-sm text-gray-700 space-y-1">
+                            <p>
+                              <span className="font-medium">Responsável:</span> {encaminhamento.responsavel_nome}
+                            </p>
                           </div>
                         </div>
-                        <div className="text-sm text-gray-700 space-y-1">
-                          <p>
-                            <span className="font-medium">Responsável:</span> {encaminhamento.responsavel_nome}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-500">Nenhum encaminhamento registrado para esta família.</p>
-                    {isTecnico && (
-                      <p className="text-sm text-gray-400 mt-1">Registre encaminhamentos através da aba "Evolução".</p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500">Nenhum encaminhamento registrado para esta família.</p>
+                      {isTecnico && (
+                        <p className="text-sm text-gray-400 mt-1">
+                          Registre encaminhamentos através da aba "Evolução".
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
           <TabsContent value="composicao">
             <Card>
