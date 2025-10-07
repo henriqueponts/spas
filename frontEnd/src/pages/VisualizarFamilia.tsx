@@ -715,12 +715,12 @@ const VisualizarFamilia: React.FC = () => {
                         {mostrarFormNovoLocal && (
                           <div className="mb-3 p-3 bg-blue-50 rounded-md border border-blue-200">
                             <h6 className="font-medium text-sm text-gray-900 mb-2">Cadastrar Novo Local</h6>
-                            <input
-                              type="text"
+                            <textarea
                               value={nomeNovoLocal}
                               onChange={(e) => setNomeNovoLocal(e.target.value)}
                               placeholder="Nome do local (ex: CAPS, CRAM, etc.)"
-                              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm mb-2"
+                              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm mb-2 resize-y min-h-[40px]"
+                              rows={2}
                             />
                             <div className="flex gap-2">
                               <Button
@@ -756,16 +756,15 @@ const VisualizarFamilia: React.FC = () => {
                             ))}
                           </select>
                           <Button
-                            variant="outline"
+                            variant="default"
                             size="sm"
                             onClick={adicionarEncaminhamento}
                             disabled={loadingEvolucao || localSelecionado === ""}
                           >
-                            <Plus className="h-4 w-4" />
+                            Confirmar
                           </Button>
                         </div>
 
-                        {/* Lista de encaminhamentos selecionados */}
                         {encaminhamentosSelecionados.length > 0 && (
                           <div className="space-y-2">
                             <p className="text-sm font-medium text-gray-700">Locais selecionados:</p>

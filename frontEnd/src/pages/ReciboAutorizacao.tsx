@@ -275,10 +275,17 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
       </div>
       
       <script>
+        let downloadExecuted = false;
+        
         window.onload = function() {
+          // Always show print dialog
           setTimeout(function() {
             window.print();
-            
+          }, 100);
+          
+          // Download only once (first time the window is opened)
+          if (!downloadExecuted) {
+            downloadExecuted = true;
             setTimeout(function() {
               const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' });
               const url = URL.createObjectURL(blob);
@@ -290,7 +297,7 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
               document.body.removeChild(a);
               URL.revokeObjectURL(url);
             }, 500);
-          }, 100);
+          }
         }
       </script>
     </body>

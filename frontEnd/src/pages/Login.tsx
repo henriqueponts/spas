@@ -169,21 +169,7 @@ const Login: React.FC = () => {
               placeholder="Digite sua senha"
             />
           </div>
-
-            {/* Links auxiliares */}
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-gray-600">Lembrar-me</span>
-              </label>
-              <a href="#" className="text-indigo-600 hover:text-indigo-500">
-                Esqueceu a senha?
-              </a>
-            </div>
-
+        
             {/* Botão de submit */}
             <button
               type="submit"

@@ -278,11 +278,15 @@ export const gerarReciboEntrega = (dados: DadosReciboEntrega) => {
       </div>
       
       <script>
+        let downloadExecuted = false;
+        
         window.onload = function() {
           setTimeout(function() {
             window.print();
-            
-            // Trigger download after print dialog
+          }, 100);
+          
+          if (!downloadExecuted) {
+            downloadExecuted = true;
             setTimeout(function() {
               const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' });
               const url = URL.createObjectURL(blob);
@@ -294,7 +298,7 @@ export const gerarReciboEntrega = (dados: DadosReciboEntrega) => {
               document.body.removeChild(a);
               URL.revokeObjectURL(url);
             }, 500);
-          }, 100);
+          }
         }
       </script>
     </body>
