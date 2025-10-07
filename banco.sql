@@ -390,6 +390,16 @@ CREATE TABLE IF NOT EXISTS autorizacoes_beneficios (
     INDEX idx_autorizacoes_autorizador (autorizador_id)
 );
 
+ALTER TABLE autorizacoes_beneficios
+ADD COLUMN motivo_cancelamento TEXT NULL COMMENT 'Motivo do cancelamento do benefício',
+ADD COLUMN observacoes_cancelamento TEXT NULL COMMENT 'Observações adicionais sobre o cancelamento',
+ADD COLUMN cancelado_por INT NULL COMMENT 'ID do usuário que cancelou o benefício',
+ADD COLUMN data_cancelamento DATETIME NULL COMMENT 'Data e hora do cancelamento',
+ADD CONSTRAINT fk_autorizacoes_cancelado_por FOREIGN KEY (cancelado_por) REFERENCES usuarios(id);
+
+CREATE INDEX idx_autorizacoes_cancelado_por ON autorizacoes_beneficios(cancelado_por);
+
+
 -- Tabela para benefícios concedidos
 CREATE TABLE beneficios (
     id INT AUTO_INCREMENT PRIMARY KEY,
