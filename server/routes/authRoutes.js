@@ -1871,11 +1871,13 @@ function isDateInPast(date) {
 }
 
 // Rota para cadastrar beneficios
+// Rota para cadastrar beneficios (VERSÃO CORRIGIDA PARA CONEXÃO ÚNICA)
 router.post("/beneficios", verifyToken, async (req, res) => {
-  let dbtransacao
+  let db; // Usaremos 'db' para representar a conexão
   try {
-    dbtransacao = await connectToDatabase()
-    await dbtransacao.beginTransaction()
+    db = await connectToDatabase(); // 'db' agora é a conexão, não o pool
+    await db.beginTransaction();    // Agora isso funciona!
+
     const {
       familia_id,
       autorizacao_id,
@@ -1886,67 +1888,66 @@ router.post("/beneficios", verifyToken, async (req, res) => {
       data_entrega,
       observacoes,
       force,
-    } = req.body
+    } = req.body;
 
-    const responsavel_id = req.userId
+    const responsavel_id = req.userId;
 
-    // Campos obrigatorios
+    // O resto do seu código permanece quase idêntico, apenas usando 'db' em vez de 'connection'
     if (!familia_id || !tipo_beneficio || !justificativa) {
-      return res.status(400).json({ message: "Campos obrigatórios não preenchidos." })
+      return res.status(400).json({ message: "Campos obrigatórios não preenchidos." });
     }
 
     if (autorizacao_id) {
-      const [autorizacao] = await dbtransacao.query(
+      const [autorizacao] = await db.query(
         `SELECT * FROM autorizacoes_beneficios
-                 WHERE id = ? AND familia_id = ? AND status = 'ativa'
-                 AND data_validade >= CURDATE() AND quantidade_utilizada < quantidade`,
+         WHERE id = ? AND familia_id = ? AND status = 'ativa'
+         AND data_validade >= CURDATE() AND quantidade_utilizada < quantidade`,
         [autorizacao_id, familia_id],
-      )
+      );
 
       if (autorizacao.length === 0) {
         return res.status(400).json({
           message: "Autorização inválida, expirada ou já totalmente utilizada.",
-        })
+        });
       }
 
-      // Verificar se o tipo de benefício corresponde
       if (autorizacao[0].tipo_beneficio !== tipo_beneficio) {
         return res.status(400).json({
           message: "Tipo de benefício não corresponde à autorização.",
-        })
+        });
       }
     }
 
     if (!force) {
-      const [existingBenefits] = await dbtransacao.query(
+      const [existingBenefits] = await db.query(
         `SELECT b.id, b.tipo_beneficio, p_resp.nome_completo AS responsavel_familia_nome
-                 FROM beneficios b
-                 LEFT JOIN familias f ON b.familia_id = f.id
-                 LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
-                 WHERE
-                     b.familia_id = ? AND
-                     MONTH(b.data_entrega) = MONTH(CURDATE()) AND
-                     YEAR(b.data_entrega) = YEAR(CURDATE())
-                 LIMIT 1`,
+         FROM beneficios b
+         LEFT JOIN familias f ON b.familia_id = f.id
+         LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
+         WHERE
+             b.familia_id = ? AND
+             MONTH(b.data_entrega) = MONTH(CURDATE()) AND
+             YEAR(b.data_entrega) = YEAR(CURDATE())
+         LIMIT 1`,
         [familia_id],
-      )
+      );
 
       if (existingBenefits.length > 0) {
-        const { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente } = existingBenefits[0]
+        const { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente } = existingBenefits[0];
         return res.status(409).json({
           message: `ATENÇÃO: A família de ${responsavel_familia_nome || "um responsável"} já recebeu um benefício do tipo "${tipoBeneficioExistente}" este mês. Deseja registrar a entrega mesmo assim?`,
           requiresConfirmation: true,
           existingBenefit: { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente },
-        })
+        });
       }
     }
 
     const sqlQuery = `
-            INSERT INTO beneficios (
-                familia_id, autorizacao_id, tipo_beneficio, descricao_beneficio, valor,
-                justificativa, responsavel_id, status, data_entrega, observacoes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
+        INSERT INTO beneficios (
+            familia_id, autorizacao_id, tipo_beneficio, descricao_beneficio, valor,
+            justificativa, responsavel_id, status, data_entrega, observacoes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
     const params = [
       familia_id,
       autorizacao_id || null,
@@ -1958,52 +1959,52 @@ router.post("/beneficios", verifyToken, async (req, res) => {
       "entregue",
       data_entrega,
       observacoes || "",
-    ]
+    ];
 
-    const [result] = await dbtransacao.query(sqlQuery, params)
+    const [result] = await db.query(sqlQuery, params);
 
     if (autorizacao_id) {
-      await dbtransacao.query(
+      await db.query(
         `UPDATE autorizacoes_beneficios
-                 SET quantidade_utilizada = quantidade_utilizada + 1,
-                     updated_at = NOW()
-                 WHERE id = ?`,
+         SET quantidade_utilizada = quantidade_utilizada + 1,
+             updated_at = NOW()
+         WHERE id = ?`,
         [autorizacao_id],
-      )
+      );
 
-      // Verificar se deve marcar como utilizada
-      await dbtransacao.query(
+      await db.query(
         `UPDATE autorizacoes_beneficios
-                 SET status = 'utilizada'
-                 WHERE id = ? AND quantidade_utilizada >= quantidade`,
+         SET status = 'utilizada'
+         WHERE id = ? AND quantidade_utilizada >= quantidade`,
         [autorizacao_id],
-      )
+      );
     }
 
-    await dbtransacao.commit()
-    const beneficio_id = result.insertId
+    await db.commit(); // Confirma a transação
+    const beneficio_id = result.insertId;
 
-    const [beneficioInserido] = await dbtransacao.query(
+    const [beneficioInserido] = await db.query(
       `
-            SELECT b.*, u.nome as responsavel_id, f.prontuario, p.nome_completo as responsavel_nome
-            FROM beneficios b
-            LEFT JOIN familias f ON b.familia_id = f.id
-            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
-            LEFT JOIN usuarios u ON b.responsavel_id = u.id
-            WHERE b.id = ?
-        `,
+        SELECT b.*, u.nome as responsavel_id, f.prontuario, p.nome_completo as responsavel_nome
+        FROM beneficios b
+        LEFT JOIN familias f ON b.familia_id = f.id
+        LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+        LEFT JOIN usuarios u ON b.responsavel_id = u.id
+        WHERE b.id = ?
+    `,
       [beneficio_id],
-    )
+    );
 
-    return res.status(201).json(beneficioInserido[0])
+    return res.status(201).json(beneficioInserido[0]);
   } catch (err) {
-    if (dbtransacao) {
-      await dbtransacao.rollback()
+    if (db) {
+      await db.rollback(); // Reverte a transação em caso de erro
     }
-    console.error("Erro ao registrar benefício:", err)
-    return res.status(500).json({ message: err.sqlMessage || err.message || "Erro interno do servidor" })
+    console.error("Erro ao registrar benefício:", err);
+    return res.status(500).json({ message: err.sqlMessage || err.message || "Erro interno do servidor" });
   }
-})
+  // NÃO HÁ BLOCO 'finally' PARA FECHAR A CONEXÃO
+});
 
 // Rota para buscar o HISTÓRICO de Benefícios
 router.get("/beneficios/historico", async (req, res) => {
@@ -2730,8 +2731,6 @@ router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/editar", verify
       message: "Erro ao editar autorização",
       error: error.message,
     })
-  } finally {
-    if (db) await db.end()
   }
 })
 
