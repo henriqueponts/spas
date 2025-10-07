@@ -179,7 +179,7 @@ const BeneficiosPage: React.FC = () => {
       const response = await api.get(`/auth/familias/${family.id}/autorizacoes-beneficios/disponiveis`)
       setAutorizacoesDisponiveis(Array.isArray(response.data) ? response.data : [])
       if (response.data.length === 0) {
-        showMessage("Esta família não possui benefícios autorizados no momento", "error")
+        showMessage("Esta família não possui benefícios autorizados no momento. Contate o Técnico ou Coordenador responsável.", "error")
       } else {
         showMessage(
           `Família ${family.responsavel_nome} selecionada. ${response.data.length} benefício(s) autorizado(s)`,

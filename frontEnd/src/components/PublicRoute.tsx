@@ -19,9 +19,11 @@ export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
     );
   }
 
-  // Se o usuário está autenticado, redireciona para home
+  // Se o usuário está autenticado, redireciona para a rota raiz ("/")
+  // Isso permite que o RootRedirect (em App.tsx) use o CargoRoutes
+  // e envie o usuário externo (cargo 5) para /beneficios.
   if (user) {
-    return <Navigate to="/home" replace />;
+    return <Navigate to="/" replace />; // <--- LINHA CORRIGIDA
   }
 
   // Se não está autenticado, mostra a página pública (login)

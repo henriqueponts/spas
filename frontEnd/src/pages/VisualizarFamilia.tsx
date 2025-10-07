@@ -127,6 +127,23 @@ interface Evolucao {
   usuario_cargo?: string
 }
 
+interface LocalEncaminhamento {
+  id: number
+  nome: string
+  created_at: string
+  updated_at: string
+}
+
+interface Encaminhamento {
+  id: number
+  familia_id: number
+  evolucao_id: number | null
+  data_encaminhamento: string
+  local_nome: string
+  responsavel_nome: string
+  created_at: string
+}
+
 interface AutorizacaoBeneficio {
   id: number
   familia_id: number
@@ -167,9 +184,21 @@ const VisualizarFamilia: React.FC = () => {
   const [novaEvolucao, setNovaEvolucao] = useState("")
   const [mostrarFormEvolucao, setMostrarFormEvolucao] = useState(false)
   const [loadingEvolucao, setLoadingEvolucao] = useState(false)
+
   const isTecnico = user?.cargo_id === 3
   const isCoordenador = user?.cargo_id === 2
+  const isDiretor = user?.cargo_id === 1
+  const podeVisualizarEvolucao = isTecnico || isCoordenador || isDiretor
+  const podeCadastrarEvolucao = isTecnico || isCoordenador
   const podeAutorizar = isTecnico || isCoordenador
+
+  const [locaisEncaminhamento, setLocaisEncaminhamento] = useState<LocalEncaminhamento[]>([])
+  const [encaminhamentos, setEncaminhamentos] = useState<Encaminhamento[]>([])
+  const [localSelecionado, setLocalSelecionado] = useState<number | "">("")
+  const [encaminhamentosSelecionados, setEncaminhamentosSelecionados] = useState<number[]>([])
+  const [mostrarFormNovoLocal, setMostrarFormNovoLocal] = useState(false)
+  const [nomeNovoLocal, setNomeNovoLocal] = useState("")
+  const [loadingNovoLocal, setLoadingNovoLocal] = useState(false)
 
   const [autorizacoes, setAutorizacoes] = useState<AutorizacaoBeneficio[]>([])
   const [mostrarFormAutorizacao, setMostrarFormAutorizacao] = useState(false)
@@ -181,16 +210,23 @@ const VisualizarFamilia: React.FC = () => {
     observacoes: "",
   })
 
-  // --- LÓGICA DE DADOS E FORMATAÇÃO (Mantida) ---
+  // --- LÓGICA DE DADOS E FORMATÇÃO (Mantida) ---
   useEffect(() => {
     if (id) carregarDadosFamilia()
   }, [id])
 
   useEffect(() => {
-    if (id && isTecnico) {
+    if (id && podeVisualizarEvolucao) {
       carregarEvolucoes()
+      carregarLocaisEncaminhamento()
     }
-  }, [id, isTecnico])
+  }, [id, podeVisualizarEvolucao])
+
+  useEffect(() => {
+    if (id && podeVisualizarEvolucao) {
+      carregarEncaminhamentos()
+    }
+  }, [id, podeVisualizarEvolucao])
 
   useEffect(() => {
     if (id) {
@@ -222,6 +258,24 @@ const VisualizarFamilia: React.FC = () => {
     }
   }
 
+  const carregarLocaisEncaminhamento = async () => {
+    try {
+      const response = await api.get("/auth/locais-encaminhamento")
+      setLocaisEncaminhamento(response.data)
+    } catch (error) {
+      console.error("Erro ao carregar locais de encaminhamento:", error)
+    }
+  }
+
+  const carregarEncaminhamentos = async () => {
+    try {
+      const response = await api.get(`/auth/familias/${id}/encaminhamentos`)
+      setEncaminhamentos(response.data)
+    } catch (error) {
+      console.error("Erro ao carregar encaminhamentos:", error)
+    }
+  }
+
   const carregarAutorizacoes = async () => {
     try {
       const response = await api.get(`/auth/familias/${id}/autorizacoes-beneficios`)
@@ -238,16 +292,75 @@ const VisualizarFamilia: React.FC = () => {
     }
     setLoadingEvolucao(true)
     try {
-      await api.post(`/auth/familias/${id}/evolucoes`, { descricao: novaEvolucao })
+      // Salvar a evolução
+      const evolucaoResponse = await api.post(`/auth/familias/${id}/evolucoes`, { descricao: novaEvolucao })
+      const evolucaoId = evolucaoResponse.data.id
+
+      // Se houver encaminhamentos selecionados, salvá-los
+      if (encaminhamentosSelecionados.length > 0) {
+        await api.post(`/auth/familias/${id}/encaminhamentos`, {
+          evolucao_id: evolucaoId,
+          locais_ids: encaminhamentosSelecionados,
+        })
+      }
+
       setNovaEvolucao("")
+      setEncaminhamentosSelecionados([])
+      setLocalSelecionado("")
       setMostrarFormEvolucao(false)
       await carregarEvolucoes()
+      await carregarEncaminhamentos()
       alert("Evolução registrada com sucesso!")
     } catch (error) {
       console.error("Erro ao salvar evolução:", error)
       alert("Erro ao salvar evolução. Tente novamente.")
     } finally {
       setLoadingEvolucao(false)
+    }
+  }
+
+  const adicionarEncaminhamento = () => {
+    if (localSelecionado === "") {
+      alert("Por favor, selecione um local de encaminhamento.")
+      return
+    }
+
+    if (encaminhamentosSelecionados.includes(Number(localSelecionado))) {
+      alert("Este local já foi adicionado.")
+      return
+    }
+
+    setEncaminhamentosSelecionados([...encaminhamentosSelecionados, Number(localSelecionado)])
+    setLocalSelecionado("")
+  }
+
+  const removerEncaminhamento = (localId: number) => {
+    setEncaminhamentosSelecionados(encaminhamentosSelecionados.filter((id) => id !== localId))
+  }
+
+  const getNomeLocal = (localId: number) => {
+    const local = locaisEncaminhamento.find((l) => l.id === localId)
+    return local ? local.nome : "Local não encontrado"
+  }
+
+  const cadastrarNovoLocal = async () => {
+    if (!nomeNovoLocal.trim()) {
+      alert("Por favor, informe o nome do local.")
+      return
+    }
+
+    setLoadingNovoLocal(true)
+    try {
+      await api.post("/auth/locais-encaminhamento", { nome: nomeNovoLocal })
+      setNomeNovoLocal("")
+      setMostrarFormNovoLocal(false)
+      await carregarLocaisEncaminhamento()
+      alert("Local cadastrado com sucesso!")
+    } catch (error: any) {
+      console.error("Erro ao cadastrar local:", error)
+      alert(error.response?.data?.message || "Erro ao cadastrar local. Tente novamente.")
+    } finally {
+      setLoadingNovoLocal(false)
     }
   }
 
@@ -540,9 +653,10 @@ const VisualizarFamilia: React.FC = () => {
           </Card>
         </div>
 
-        <Tabs defaultValue={isTecnico ? "evolucao" : "composicao"}>
+        <Tabs defaultValue={podeVisualizarEvolucao ? "evolucao" : "composicao"}>
           <TabsList>
-            {isTecnico && <TabsTrigger value="evolucao">Evolução</TabsTrigger>}
+            {podeVisualizarEvolucao && <TabsTrigger value="evolucao">Evolução</TabsTrigger>}
+            {podeVisualizarEvolucao && <TabsTrigger value="encaminhamentos">Encaminhamentos</TabsTrigger>}
             <TabsTrigger value="composicao">Composição</TabsTrigger>
             <TabsTrigger value="trabalho">Trabalho e Renda</TabsTrigger>
             <TabsTrigger value="beneficios">Benefícios</TabsTrigger>
@@ -551,7 +665,7 @@ const VisualizarFamilia: React.FC = () => {
             <TabsTrigger value="social">Situação Social</TabsTrigger>
           </TabsList>
 
-          {isTecnico && (
+          {podeVisualizarEvolucao && (
             <TabsContent value="evolucao">
               <Card>
                 <CardHeader>
@@ -563,14 +677,16 @@ const VisualizarFamilia: React.FC = () => {
                       </CardTitle>
                       <CardDescription>Histórico de atendimentos e evoluções técnicas.</CardDescription>
                     </div>
-                    <Button onClick={() => setMostrarFormEvolucao(!mostrarFormEvolucao)}>
-                      {mostrarFormEvolucao ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                      {mostrarFormEvolucao ? "Cancelar" : "Nova Evolução"}
-                    </Button>
+                    {podeCadastrarEvolucao && (
+                      <Button onClick={() => setMostrarFormEvolucao(!mostrarFormEvolucao)}>
+                        {mostrarFormEvolucao ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                        {mostrarFormEvolucao ? "Cancelar" : "Nova Evolução"}
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {mostrarFormEvolucao && (
+                  {mostrarFormEvolucao && podeCadastrarEvolucao && (
                     <div className="p-4 bg-gray-50 rounded-lg border">
                       <h4 className="font-medium mb-3 text-gray-900">Registrar Nova Evolução</h4>
                       <textarea
@@ -580,10 +696,106 @@ const VisualizarFamilia: React.FC = () => {
                         className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                         rows={4}
                       />
+
+                      <div className="mt-4 p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-medium text-gray-900">Encaminhamentos</h5>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setMostrarFormNovoLocal(true)}
+                            disabled={loadingEvolucao}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Cadastrar Local
+                          </Button>
+                        </div>
+
+                        {/* Modal para cadastrar novo local */}
+                        {mostrarFormNovoLocal && (
+                          <div className="mb-3 p-3 bg-blue-50 rounded-md border border-blue-200">
+                            <h6 className="font-medium text-sm text-gray-900 mb-2">Cadastrar Novo Local</h6>
+                            <textarea
+                              value={nomeNovoLocal}
+                              onChange={(e) => setNomeNovoLocal(e.target.value)}
+                              placeholder="Nome do local (ex: CAPS, CRAM, etc.)"
+                              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm mb-2 resize-y min-h-[40px]"
+                              rows={2}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setMostrarFormNovoLocal(false)
+                                  setNomeNovoLocal("")
+                                }}
+                                disabled={loadingNovoLocal}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button size="sm" onClick={cadastrarNovoLocal} disabled={loadingNovoLocal}>
+                                {loadingNovoLocal ? "Salvando..." : "Salvar Local"}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 mb-3">
+                          <select
+                            value={localSelecionado}
+                            onChange={(e) => setLocalSelecionado(e.target.value === "" ? "" : Number(e.target.value))}
+                            className="flex-1 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+                            disabled={loadingEvolucao}
+                          >
+                            <option value="">Selecione um local...</option>
+                            {locaisEncaminhamento.map((local) => (
+                              <option key={local.id} value={local.id}>
+                                {local.nome}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={adicionarEncaminhamento}
+                            disabled={loadingEvolucao || localSelecionado === ""}
+                          >
+                            Confirmar
+                          </Button>
+                        </div>
+
+                        {encaminhamentosSelecionados.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-gray-700">Locais selecionados:</p>
+                            {encaminhamentosSelecionados.map((localId) => (
+                              <div
+                                key={localId}
+                                className="flex items-center justify-between bg-blue-50 p-2 rounded-md text-sm"
+                              >
+                                <span className="text-gray-900">{getNomeLocal(localId)}</span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => removerEncaminhamento(localId)}
+                                  disabled={loadingEvolucao}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="mt-3 flex justify-end gap-2">
                         <Button
                           variant="outline"
-                          onClick={() => setMostrarFormEvolucao(false)}
+                          onClick={() => {
+                            setMostrarFormEvolucao(false)
+                            setEncaminhamentosSelecionados([])
+                            setLocalSelecionado("")
+                          }}
                           disabled={loadingEvolucao}
                         >
                           Cancelar
@@ -613,12 +825,79 @@ const VisualizarFamilia: React.FC = () => {
                               </div>
                             </div>
                             <p className="text-sm text-gray-700 whitespace-pre-line">{evolucao.descricao}</p>
+
+                            {encaminhamentos.filter((enc) => enc.evolucao_id === evolucao.id).length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-300">
+                                <p className="text-xs font-medium text-gray-600 mb-1">Encaminhamentos:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {encaminhamentos
+                                    .filter((enc) => enc.evolucao_id === evolucao.id)
+                                    .map((enc) => (
+                                      <Badge key={enc.id} variant="outline" className="text-xs">
+                                        {enc.local_nome}
+                                      </Badge>
+                                    ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <p className="text-center text-gray-500 py-8">Nenhuma evolução registrada para esta família.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {podeVisualizarEvolucao && (
+            <TabsContent value="encaminhamentos">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                    Encaminhamentos da Família
+                  </CardTitle>
+                  <CardDescription>
+                    Histórico de encaminhamentos realizados para serviços e instituições.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {encaminhamentos.length > 0 ? (
+                    <div className="space-y-4">
+                      {encaminhamentos.map((encaminhamento) => (
+                        <div key={encaminhamento.id} className="bg-gray-100 p-4 rounded-lg">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="default" className="text-sm">
+                                {encaminhamento.local_nome}
+                              </Badge>
+                            </div>
+                            <div className="text-sm text-gray-500 flex items-center gap-2">
+                              <Calendar className="h-3 w-3" />
+                              {formatarData(encaminhamento.data_encaminhamento)}
+                            </div>
+                          </div>
+                          <div className="text-sm text-gray-700 space-y-1">
+                            <p>
+                              <span className="font-medium">Responsável:</span> {encaminhamento.responsavel_nome}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500">Nenhum encaminhamento registrado para esta família.</p>
+                      {isTecnico && (
+                        <p className="text-sm text-gray-400 mt-1">
+                          Registre encaminhamentos através da aba "Evolução".
+                        </p>
+                      )}
+                    </div>
                   )}
                 </CardContent>
               </Card>
