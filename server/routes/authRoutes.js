@@ -24,9 +24,9 @@ router.post("/registro", async (req, res) => {
         // Verificar se é DIRETOR
         const [userResult] = await db.query(
           `
-                    SELECT c.nome as cargo_nome 
-                    FROM usuarios u 
-                    JOIN cargos c ON u.cargo_id = c.id 
+                    SELECT c.nome as cargo_nome
+                    FROM usuarios u
+                    JOIN cargos c ON u.cargo_id = c.id
                     WHERE u.id = ?
                 `,
           [decoded.id],
@@ -60,7 +60,7 @@ router.post("/registro", async (req, res) => {
     // Inserir usuário
     await db.query(
       `
-            INSERT INTO usuarios (nome, cpf, email, senha_hash, cargo_id, equipamento_id) 
+            INSERT INTO usuarios (nome, cpf, email, senha_hash, cargo_id, equipamento_id)
             VALUES (?, ?, ?, ?, ?, ?)
         `,
       [nome, cpf, email || null, hashPassword, cargo, equipamento],
@@ -80,7 +80,7 @@ router.post("/login", async (req, res) => {
     const db = await connectToDatabase()
     const [rows] = await db.query(
       `
-            SELECT 
+            SELECT
                 u.*,
                 c.nome as cargo_nome,
                 e.nome as equipamento_nome
@@ -178,7 +178,7 @@ router.get("/home", verifyToken, async (req, res) => {
     const db = await connectToDatabase()
     const [rows] = await db.query(
       `
-            SELECT 
+            SELECT
                 u.id, u.nome, u.cargo_id, c.nome as cargo_nome,
                 u.equipamento_id, e.nome as equipamento_nome
             FROM usuarios u
@@ -216,7 +216,7 @@ router.get("/familias", verifyToken, async (req, res) => {
 
     // Query principal - buscar famílias
     const [familias] = await db.query(`
-            SELECT 
+            SELECT
                 f.id,
                 f.prontuario,
                 f.data_cadastro,
@@ -308,15 +308,15 @@ router.get("/usuarios/tecnicos", async (req, res) => {
   try {
     const db = await connectToDatabase()
     const [usuarios] = await db.query(`
-            SELECT 
-                u.id, 
+            SELECT
+                u.id,
                 u.nome,
                 c.nome as cargo_nome,
                 e.nome as equipamento_nome
             FROM usuarios u
             JOIN cargos c ON u.cargo_id = c.id
             JOIN equipamento e ON u.equipamento_id = e.id
-            WHERE u.ativo = true 
+            WHERE u.ativo = true
             AND c.nome IN ('ASSISTENTE', 'TECNICO')
             ORDER BY u.nome
         `)
@@ -334,9 +334,9 @@ router.get("/programas-sociais", async (req, res) => {
   try {
     const db = await connectToDatabase()
     const [programas] = await db.query(`
-            SELECT id, codigo, nome, valor_padrao 
-            FROM programas_sociais_disponiveis 
-            WHERE ativo = TRUE 
+            SELECT id, codigo, nome, valor_padrao
+            FROM programas_sociais_disponiveis
+            WHERE ativo = TRUE
             ORDER BY nome
         `)
     console.log("✅ Programas sociais encontrados:", programas.length)
@@ -353,9 +353,9 @@ router.get("/tipos-despesas", async (req, res) => {
   try {
     const db = await connectToDatabase()
     const [tipos] = await db.query(`
-            SELECT id, codigo, nome, obrigatoria 
-            FROM tipos_despesas 
-            WHERE ativo = TRUE 
+            SELECT id, codigo, nome, obrigatoria
+            FROM tipos_despesas
+            WHERE ativo = TRUE
             ORDER BY obrigatoria DESC, nome
         `)
     console.log("✅ Tipos de despesas encontrados:", tipos.length)
@@ -427,9 +427,9 @@ router.post("/familias", verifyToken, async (req, res) => {
     const [familiaResult] = await db.query(
       `
             INSERT INTO familias (
-                equipamento_id, 
-                data_cadastro, 
-                data_atendimento, 
+                equipamento_id,
+                data_cadastro,
+                data_atendimento,
                 profissional_id,
                 situacao
             ) VALUES (?, CURDATE(), ?, ?, 'ativo')
@@ -445,8 +445,8 @@ router.post("/familias", verifyToken, async (req, res) => {
     await db.query(
       `
             INSERT INTO pessoas (
-                familia_id, nome_completo, data_nascimento, sexo, cpf, rg, 
-                estado_civil, escolaridade, naturalidade, telefone, telefone_recado, 
+                familia_id, nome_completo, data_nascimento, sexo, cpf, rg,
+                estado_civil, escolaridade, naturalidade, telefone, telefone_recado,
                 email, nis, titulo_eleitor, ctps, tipo_membro, ocupacao, renda_mensal
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'responsavel', ?, ?)
         `,
@@ -477,7 +477,7 @@ router.post("/familias", verifyToken, async (req, res) => {
     await db.query(
       `
             INSERT INTO enderecos (
-                familia_id, logradouro, numero, complemento, bairro, cidade, 
+                familia_id, logradouro, numero, complemento, bairro, cidade,
                 uf, cep, referencia, tempo_moradia
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
@@ -822,7 +822,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     // 1. Buscar dados básicos da família
     const [familiaResult] = await db.query(
       `
-            SELECT 
+            SELECT
                 f.*,
                 e.nome as equipamento_nome,
                 e.regiao as equipamento_regiao,
@@ -856,7 +856,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const [responsavelResult] = await db.query(
       `
             SELECT *
-            FROM pessoas 
+            FROM pessoas
             WHERE familia_id = ? AND tipo_membro = 'responsavel'
         `,
       [familia_id],
@@ -868,7 +868,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const [integrantesResult] = await db.query(
       `
             SELECT *
-            FROM pessoas 
+            FROM pessoas
             WHERE familia_id = ? AND tipo_membro != 'responsavel'
             ORDER BY data_nascimento ASC
         `,
@@ -881,7 +881,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const [enderecoResult] = await db.query(
       `
             SELECT *
-            FROM enderecos 
+            FROM enderecos
             WHERE familia_id = ?
         `,
       [familia_id],
@@ -893,7 +893,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const [saudeResult] = await db.query(
       `
             SELECT *
-            FROM saude 
+            FROM saude
             WHERE familia_id = ?
         `,
       [familia_id],
@@ -905,7 +905,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const [habitacaoResult] = await db.query(
       `
             SELECT *
-            FROM habitacao 
+            FROM habitacao
             WHERE familia_id = ?
         `,
       [familia_id],
@@ -917,7 +917,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const [trabalhoRendaResult] = await db.query(
       `
             SELECT *
-            FROM trabalho_renda 
+            FROM trabalho_renda
             WHERE familia_id = ?
         `,
       [familia_id],
@@ -928,7 +928,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     console.log("🤝 Buscando programas sociais...")
     const [programasSociaisResult] = await db.query(
       `
-            SELECT 
+            SELECT
                 fps.*,
                 psd.nome as programa_nome,
                 psd.codigo as programa_codigo
@@ -944,7 +944,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     console.log("💰 Buscando despesas...")
     const [despesasResult] = await db.query(
       `
-            SELECT 
+            SELECT
                 fd.*,
                 td.nome as tipo_nome,
                 td.codigo as tipo_codigo
@@ -962,7 +962,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const [situacaoSocialResult] = await db.query(
       `
             SELECT *
-            FROM situacao_social 
+            FROM situacao_social
             WHERE familia_id = ?
         `,
       [familia_id],
@@ -974,7 +974,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const [servicosPublicosResult] = await db.query(
       `
             SELECT tipo
-            FROM familia_servicos_publicos 
+            FROM familia_servicos_publicos
             WHERE familia_id = ?
         `,
       [familia_id],
@@ -1167,7 +1167,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     console.log("👨‍👩‍👧‍👦 Atualizando dados básicos da família...")
     await db.query(
       `
-            UPDATE familias SET 
+            UPDATE familias SET
                 equipamento_id = ?,
                 data_atendimento = ?,
                 profissional_id = ?,
@@ -1182,10 +1182,10 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     console.log("👤 Atualizando responsável...")
     await db.query(
       `
-            UPDATE pessoas SET 
+            UPDATE pessoas SET
                 nome_completo = ?, data_nascimento = ?, sexo = ?, cpf = ?, rg = ?,
-                estado_civil = ?, escolaridade = ?, naturalidade = ?, telefone = ?, 
-                telefone_recado = ?, email = ?, nis = ?, titulo_eleitor = ?, ctps = ?, 
+                estado_civil = ?, escolaridade = ?, naturalidade = ?, telefone = ?,
+                telefone_recado = ?, email = ?, nis = ?, titulo_eleitor = ?, ctps = ?,
                 ocupacao = ?, renda_mensal = ?
             WHERE familia_id = ? AND tipo_membro = 'responsavel'
         `,
@@ -1215,7 +1215,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     console.log("🏠 Atualizando endereço...")
     await db.query(
       `
-            UPDATE enderecos SET 
+            UPDATE enderecos SET
                 logradouro = ?, numero = ?, complemento = ?, bairro = ?, cidade = ?,
                 uf = ?, cep = ?, referencia = ?, tempo_moradia = ?
             WHERE familia_id = ?
@@ -1239,7 +1239,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     console.log("🏥 Atualizando dados de saúde...")
     await db.query(
       `
-            UPDATE saude SET 
+            UPDATE saude SET
                 tem_deficiencia = ?, deficiencia_qual = ?, tem_tratamento_saude = ?,
                 tratamento_qual = ?, usa_medicacao_continua = ?, medicacao_qual = ?,
                 tem_dependente_cuidados = ?, dependente_quem = ?, observacoes = ?
@@ -1269,9 +1269,9 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
 
     await db.query(
       `
-            UPDATE habitacao SET 
+            UPDATE habitacao SET
                 qtd_comodos = ?, qtd_dormitorios = ?, tipo_construcao = ?,
-                area_conflito = ?, condicao_domicilio = ?, energia_eletrica = ?, 
+                area_conflito = ?, condicao_domicilio = ?, energia_eletrica = ?,
                 agua = ?, esgoto = ?, coleta_lixo = ?
             WHERE familia_id = ?
         `,
@@ -1294,7 +1294,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     console.log("💼 Atualizando trabalho e renda...")
     await db.query(
       `
-            UPDATE trabalho_renda SET 
+            UPDATE trabalho_renda SET
                 quem_trabalha = ?, rendimento_total = ?
             WHERE familia_id = ?
         `,
@@ -1306,7 +1306,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     console.log("👥 Atualizando situação social...")
     await db.query(
       `
-            UPDATE situacao_social SET 
+            UPDATE situacao_social SET
                 participa_religiao = ?, religiao_qual = ?, participa_acao_social = ?,
                 acao_social_qual = ?, observacoes = ?
             WHERE familia_id = ?
@@ -1478,7 +1478,7 @@ router.get("/familias/:id/evolucoes", verifyToken, async (req, res) => {
     // Buscar evoluções com informações do usuário
     const [evolucoes] = await db.query(
       `
-            SELECT 
+            SELECT
                 e.*,
                 u.nome as usuario_nome,
                 c.nome as usuario_cargo
@@ -1551,10 +1551,10 @@ router.post("/familias/:id/evolucoes", verifyToken, async (req, res) => {
     const [result] = await db.query(
       `
             INSERT INTO evolucoes (
-                familia_id, 
-                usuario_id, 
-                data_evolucao, 
-                hora_evolucao, 
+                familia_id,
+                usuario_id,
+                data_evolucao,
+                hora_evolucao,
                 descricao
             ) VALUES (?, ?, ?, ?, ?)
         `,
@@ -1698,9 +1698,9 @@ router.get("/usuarios", verifyToken, async (req, res) => {
     // Verificar se o usuário logado é DIRETOR
     const [userResult] = await db.query(
       `
-            SELECT c.nome as cargo_nome 
-            FROM usuarios u 
-            JOIN cargos c ON u.cargo_id = c.id 
+            SELECT c.nome as cargo_nome
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
             WHERE u.id = ?
         `,
       [req.userId],
@@ -1721,7 +1721,7 @@ router.get("/usuarios", verifyToken, async (req, res) => {
 
     // Buscar todos os usuários com informações completas
     const [usuarios] = await db.query(`
-            SELECT 
+            SELECT
                 u.id,
                 u.nome,
                 u.cpf,
@@ -1763,9 +1763,9 @@ router.put("/usuarios/:id/status", verifyToken, async (req, res) => {
     // Verificar se o usuário logado é DIRETOR
     const [userResult] = await db.query(
       `
-            SELECT c.nome as cargo_nome 
-            FROM usuarios u 
-            JOIN cargos c ON u.cargo_id = c.id 
+            SELECT c.nome as cargo_nome
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
             WHERE u.id = ?
         `,
       [req.userId],
@@ -1823,9 +1823,9 @@ router.put("/usuarios/:id/senha", verifyToken, async (req, res) => {
     // Verificar se o usuário logado é DIRETOR
     const [userResult] = await db.query(
       `
-            SELECT c.nome as cargo_nome 
-            FROM usuarios u 
-            JOIN cargos c ON u.cargo_id = c.id 
+            SELECT c.nome as cargo_nome
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
             WHERE u.id = ?
         `,
       [req.userId],
@@ -1897,8 +1897,8 @@ router.post("/beneficios", verifyToken, async (req, res) => {
 
     if (autorizacao_id) {
       const [autorizacao] = await dbtransacao.query(
-        `SELECT * FROM autorizacoes_beneficios 
-                 WHERE id = ? AND familia_id = ? AND status = 'ativa' 
+        `SELECT * FROM autorizacoes_beneficios
+                 WHERE id = ? AND familia_id = ? AND status = 'ativa'
                  AND data_validade >= CURDATE() AND quantidade_utilizada < quantidade`,
         [autorizacao_id, familia_id],
       )
@@ -1964,7 +1964,7 @@ router.post("/beneficios", verifyToken, async (req, res) => {
 
     if (autorizacao_id) {
       await dbtransacao.query(
-        `UPDATE autorizacoes_beneficios 
+        `UPDATE autorizacoes_beneficios
                  SET quantidade_utilizada = quantidade_utilizada + 1,
                      updated_at = NOW()
                  WHERE id = ?`,
@@ -1973,7 +1973,7 @@ router.post("/beneficios", verifyToken, async (req, res) => {
 
       // Verificar se deve marcar como utilizada
       await dbtransacao.query(
-        `UPDATE autorizacoes_beneficios 
+        `UPDATE autorizacoes_beneficios
                  SET status = 'utilizada'
                  WHERE id = ? AND quantidade_utilizada >= quantidade`,
         [autorizacao_id],
@@ -2158,8 +2158,8 @@ router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, re
     const [result] = await db.query(
       `
             INSERT INTO autorizacoes_beneficios (
-                familia_id, 
-                tipo_beneficio, 
+                familia_id,
+                tipo_beneficio,
                 quantidade,
                 validade_meses,
                 data_autorizacao,
@@ -2214,7 +2214,7 @@ router.get("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, res
     // Buscar todas as autorizações da família
     const [autorizacoes] = await db.query(
       `
-            SELECT 
+            SELECT
                 a.*,
                 u.nome as autorizador_nome,
                 c.nome as autorizador_cargo
@@ -2263,7 +2263,7 @@ router.get("/familias/:id/autorizacoes-beneficios/disponiveis", verifyToken, asy
     // Buscar apenas autorizações ativas e válidas
     const [autorizacoes] = await db.query(
       `
-            SELECT 
+            SELECT
                 a.*,
                 u.nome as autorizador_nome,
                 c.nome as autorizador_cargo,
@@ -2286,6 +2286,123 @@ router.get("/familias/:id/autorizacoes-beneficios/disponiveis", verifyToken, asy
     console.error("❌ Erro ao buscar autorizações disponíveis:", error)
     res.status(500).json({
       message: "Erro ao buscar autorizações disponíveis",
+      error: error.message,
+    })
+  }
+})
+
+// Rota para buscar benefícios concedidos de uma autorização específica
+router.get(
+  "/familias/:id/autorizacoes-beneficios/:autorizacaoId/beneficios-concedidos",
+  verifyToken,
+  async (req, res) => {
+    console.log("🔍 Buscando benefícios concedidos da autorização:", req.params.autorizacaoId)
+
+    const db = await connectToDatabase()
+
+    try {
+      const familia_id = Number.parseInt(req.params.id)
+      const autorizacao_id = Number.parseInt(req.params.autorizacaoId)
+
+      if (isNaN(familia_id) || isNaN(autorizacao_id)) {
+        return res.status(400).json({ message: "ID inválido" })
+      }
+
+      // Buscar benefícios que foram entregues usando esta autorização
+      const [beneficios] = await db.query(
+        `
+            SELECT
+                b.id,
+                b.tipo_beneficio,
+                b.descricao_beneficio,
+                b.valor,
+                b.data_entrega,
+                b.observacoes,
+                u.nome as responsavel_entrega
+            FROM beneficios b
+            INNER JOIN usuarios u ON b.responsavel_id = u.id
+            WHERE b.autorizacao_id = ?
+            AND b.familia_id = ?
+            AND b.status = 'entregue'
+            ORDER BY b.data_entrega DESC
+        `,
+        [autorizacao_id, familia_id],
+      )
+
+      console.log(`✅ ${beneficios.length} benefícios concedidos encontrados`)
+      res.json(beneficios)
+    } catch (error) {
+      console.error("❌ Erro ao buscar benefícios concedidos:", error)
+      res.status(500).json({
+        message: "Erro ao buscar benefícios concedidos",
+        error: error.message,
+      })
+    }
+  },
+)
+
+// Rota para cancelar uma autorização de benefício
+router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/cancelar", verifyToken, async (req, res) => {
+  console.log("🚫 Cancelando autorização:", req.params.autorizacaoId)
+
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+    const autorizacao_id = Number.parseInt(req.params.autorizacaoId)
+    const usuario_id = req.userId
+    const { motivo_cancelamento, observacoes_cancelamento } = req.body
+
+    if (isNaN(familia_id) || isNaN(autorizacao_id)) {
+      return res.status(400).json({ message: "ID inválido" })
+    }
+
+    // Validações
+    if (!motivo_cancelamento || motivo_cancelamento.trim() === "") {
+      return res.status(400).json({ message: "Motivo do cancelamento é obrigatório" })
+    }
+
+    // Verificar se a autorização existe e pertence à família
+    const [autorizacao] = await db.query(`SELECT * FROM autorizacoes_beneficios WHERE id = ? AND familia_id = ?`, [
+      autorizacao_id,
+      familia_id,
+    ])
+
+    if (autorizacao.length === 0) {
+      return res.status(404).json({ message: "Autorização não encontrada" })
+    }
+
+    // Verificar se já está cancelada
+    if (autorizacao[0].status === "cancelada") {
+      return res.status(400).json({ message: "Esta autorização já está cancelada" })
+    }
+
+    // Atualizar a autorização para cancelada
+    await db.query(
+      `
+            UPDATE autorizacoes_beneficios
+            SET
+                status = 'cancelada',
+                motivo_cancelamento = ?,
+                observacoes_cancelamento = ?,
+                cancelado_por = ?,
+                data_cancelamento = NOW(),
+                updated_at = NOW()
+            WHERE id = ?
+        `,
+      [motivo_cancelamento, observacoes_cancelamento || "", usuario_id, autorizacao_id],
+    )
+
+    console.log("✅ Autorização cancelada com sucesso")
+
+    res.json({
+      message: "Autorização cancelada com sucesso",
+      autorizacao_id: autorizacao_id,
+    })
+  } catch (error) {
+    console.error("❌ Erro ao cancelar autorização:", error)
+    res.status(500).json({
+      message: "Erro ao cancelar autorização",
       error: error.message,
     })
   }
@@ -2404,7 +2521,7 @@ router.post("/locais-encaminhamento", verifyToken, async (req, res) => {
     // Inserir o novo local
     const [result] = await db.query(
       `
-            INSERT INTO local_encaminhamento (nome) 
+            INSERT INTO local_encaminhamento (nome)
             VALUES (?)
         `,
       [nome.trim()],
@@ -2462,7 +2579,7 @@ router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
     // Buscar encaminhamentos com informações do local e responsável
     const [encaminhamentos] = await db.query(
       `
-            SELECT 
+            SELECT
                 e.id,
                 e.familia_id,
                 e.evolucao_id,
@@ -2485,115 +2602,6 @@ router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
     console.error("❌ Erro ao buscar encaminhamentos:", error)
     res.status(500).json({
       message: "Erro ao buscar encaminhamentos",
-      error: error.message,
-    })
-  }
-})
-
-// Criar encaminhamentos vinculados a uma evolução
-router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
-  console.log("📝 Criando encaminhamentos para família:", req.params.id)
-  console.log("[v0] Dados recebidos:", req.body)
-
-  const db = await connectToDatabase()
-
-  try {
-    const familia_id = Number.parseInt(req.params.id)
-    const usuario_id = req.userId
-    const { evolucao_id, locais_ids } = req.body
-
-    console.log("[v0] familia_id:", familia_id)
-    console.log("[v0] usuario_id:", usuario_id)
-    console.log("[v0] evolucao_id:", evolucao_id)
-    console.log("[v0] locais_ids:", locais_ids)
-
-    if (isNaN(familia_id)) {
-      return res.status(400).json({ message: "ID da família inválido" })
-    }
-
-    const [userResult] = await db.query("SELECT cargo_id FROM usuarios WHERE id = ?", [usuario_id])
-
-    if (userResult.length === 0) {
-      return res.status(403).json({ message: "Usuário não encontrado" })
-    }
-
-    const cargo_id = userResult[0].cargo_id
-    const podeCadastrar = cargo_id === 2 || cargo_id === 3 // Coordenador ou Técnico
-
-    if (!podeCadastrar) {
-      return res.status(403).json({
-        message: "Apenas técnicos e coordenadores podem registrar encaminhamentos",
-      })
-    }
-
-    if (!locais_ids || !Array.isArray(locais_ids) || locais_ids.length === 0) {
-      return res.status(400).json({ message: "Selecione pelo menos um local de encaminhamento" })
-    }
-
-    // Verificar se a família existe
-    const [familiaResult] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
-
-    if (familiaResult.length === 0) {
-      return res.status(404).json({ message: "Família não encontrada" })
-    }
-
-    console.log("[v0] Família encontrada")
-
-    // Verificar se a evolução existe (se foi fornecida)
-    if (evolucao_id) {
-      const [evolucaoResult] = await db.query("SELECT id FROM evolucoes WHERE id = ? AND familia_id = ?", [
-        evolucao_id,
-        familia_id,
-      ])
-
-      if (evolucaoResult.length === 0) {
-        return res.status(404).json({ message: "Evolução não encontrada" })
-      }
-      console.log("[v0] Evolução encontrada:", evolucao_id)
-    }
-
-    const data_encaminhamento = new Date().toISOString().split("T")[0]
-
-    // Inserir os encaminhamentos
-    const encaminhamentosInseridos = []
-
-    for (const local_id of locais_ids) {
-      console.log("[v0] Inserindo encaminhamento para local:", local_id)
-
-      const [localResult] = await db.query("SELECT id FROM local_encaminhamento WHERE id = ?", [local_id])
-
-      if (localResult.length === 0) {
-        console.warn(`⚠️ Local de encaminhamento ${local_id} não encontrado, pulando...`)
-        continue
-      }
-
-      const [result] = await db.query(
-        `
-                INSERT INTO encaminhamentos (
-                    familia_id,
-                    evolucao_id,
-                    local_encaminhamento_id,
-                    data_encaminhamento,
-                    responsavel_id
-                ) VALUES (?, ?, ?, ?, ?)
-            `,
-        [familia_id, evolucao_id || null, local_id, data_encaminhamento, usuario_id],
-      )
-
-      encaminhamentosInseridos.push(result.insertId)
-      console.log(`✅ Encaminhamento criado com ID: ${result.insertId}`)
-    }
-
-    console.log("✅ Todos os encaminhamentos criados:", encaminhamentosInseridos)
-
-    res.status(201).json({
-      message: "Encaminhamentos registrados com sucesso",
-      ids: encaminhamentosInseridos,
-    })
-  } catch (error) {
-    console.error("❌ Erro ao criar encaminhamentos:", error)
-    res.status(500).json({
-      message: "Erro ao registrar encaminhamentos",
       error: error.message,
     })
   }

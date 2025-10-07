@@ -31,9 +31,12 @@ import {
   X,
   Building,
   Gift,
+  Ban,
 } from "lucide-react"
 import Header from "../components/Header"
 import { gerarReciboAutorizacao } from "../pages/ReciboAutorizacao"
+// Importando o gerador de recibo de cancelamento
+import { gerarReciboCancelamento } from "../pages/ReciboCancelamento"
 
 // --- INTERFACES DE DADOS (Mantidas) ---
 interface Integrante {
@@ -158,6 +161,8 @@ interface AutorizacaoBeneficio {
   justificativa: string
   observacoes: string
   status: string
+  motivo_cancelamento?: string
+  observacoes_cancelamento?: string
 }
 
 // --- COMPONENTE DE ITEM DE INFORMAÇÃO (Estilo compatível) ---
@@ -207,6 +212,14 @@ const VisualizarFamilia: React.FC = () => {
     quantidade: 1,
     validade_meses: 1,
     justificativa: "",
+    observacoes: "",
+  })
+
+  // Adicionando estados para a funcionalidade de cancelamento
+  const [mostrarFormCancelamento, setMostrarFormCancelamento] = useState(false)
+  const [autorizacaoParaCancelar, setAutorizacaoParaCancelar] = useState<AutorizacaoBeneficio | null>(null)
+  const [dadosCancelamento, setDadosCancelamento] = useState({
+    motivo: "",
     observacoes: "",
   })
 
@@ -421,6 +434,84 @@ const VisualizarFamilia: React.FC = () => {
     } finally {
       setLoadingEvolucao(false)
     }
+  }
+
+  // Função para cancelar benefício
+  const cancelarBeneficio = async () => {
+    if (!autorizacaoParaCancelar) return
+
+    if (!dadosCancelamento.motivo.trim()) {
+      alert("Por favor, informe o motivo do cancelamento.")
+      return
+    }
+
+    setLoadingEvolucao(true)
+    try {
+      await api.put(`/auth/familias/${id}/autorizacoes-beneficios/${autorizacaoParaCancelar.id}/cancelar`, {
+        motivo_cancelamento: dadosCancelamento.motivo,
+        observacoes_cancelamento: dadosCancelamento.observacoes,
+      })
+
+      let beneficiosConcedidos: any[] = []
+      try {
+        const responseBeneficios = await api.get(
+          `/auth/familias/${id}/autorizacoes-beneficios/${autorizacaoParaCancelar.id}/beneficios-concedidos`,
+        )
+        beneficiosConcedidos = responseBeneficios.data
+      } catch (error) {
+        console.log("Nenhum benefício concedido encontrado para esta autorização")
+      }
+
+      await carregarAutorizacoes()
+      alert("Benefício cancelado com sucesso!")
+
+      // Gerar recibo de cancelamento
+      if (familia && user) {
+        gerarReciboCancelamento({
+          familia: {
+            prontuario: familia.prontuario,
+            responsavel_nome: familia.responsavel.nome_completo,
+            responsavel_cpf: familia.responsavel.cpf,
+            endereco: `${familia.endereco.logradouro}, ${familia.endereco.numero || "S/N"}${familia.endereco.complemento ? ` - ${familia.endereco.complemento}` : ""} - ${familia.endereco.bairro}`,
+            cidade: familia.endereco.cidade,
+            uf: familia.endereco.uf,
+          },
+          beneficio: {
+            tipo_beneficio: autorizacaoParaCancelar.tipo_beneficio,
+            quantidade: autorizacaoParaCancelar.quantidade,
+            data_autorizacao: autorizacaoParaCancelar.data_autorizacao,
+            autorizador_nome: autorizacaoParaCancelar.autorizador_nome,
+          },
+          beneficiosConcedidos: beneficiosConcedidos,
+          cancelamento: {
+            data_cancelamento: new Date().toISOString(),
+            motivo: dadosCancelamento.motivo,
+            observacoes: dadosCancelamento.observacoes || undefined,
+            responsavel_cancelamento: user.nome,
+            cargo_responsavel: user.cargo_nome ?? "",
+          },
+        })
+      }
+
+      // Resetar formulário
+      setMostrarFormCancelamento(false)
+      setAutorizacaoParaCancelar(null)
+      setDadosCancelamento({
+        motivo: "",
+        observacoes: "",
+      })
+    } catch (error) {
+      console.error("Erro ao cancelar benefício:", error)
+      alert("Erro ao cancelar benefício. Tente novamente.")
+    } finally {
+      setLoadingEvolucao(false)
+    }
+  }
+
+  // Função para abrir o formulário de cancelamento
+  const abrirFormCancelamento = (autorizacao: AutorizacaoBeneficio) => {
+    setAutorizacaoParaCancelar(autorizacao)
+    setMostrarFormCancelamento(true)
   }
 
   const formatarData = (data: string) =>
@@ -1131,6 +1222,80 @@ const VisualizarFamilia: React.FC = () => {
 
                 <Separator />
 
+                {/* Modal de formulário de cancelamento */}
+                {mostrarFormCancelamento && autorizacaoParaCancelar && (
+                  <div className="p-4 bg-red-50 rounded-lg border-2 border-red-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-red-900 flex items-center">
+                        <Ban className="h-5 w-5 mr-2" />
+                        Cancelar Benefício: {formatarTipoBeneficio(autorizacaoParaCancelar.tipo_beneficio)}
+                      </h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setMostrarFormCancelamento(false)
+                          setAutorizacaoParaCancelar(null)
+                          setDadosCancelamento({
+                            motivo: "",
+                            observacoes: "",
+                          })
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Motivo do Cancelamento *</label>
+                        <textarea
+                          value={dadosCancelamento.motivo}
+                          onChange={(e) => setDadosCancelamento({ ...dadosCancelamento, motivo: e.target.value })}
+                          placeholder="Descreva o motivo do cancelamento do benefício..."
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                          rows={3}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <textarea
+                          value={dadosCancelamento.observacoes}
+                          onChange={(e) => setDadosCancelamento({ ...dadosCancelamento, observacoes: e.target.value })}
+                          placeholder="Observações adicionais sobre o cancelamento (opcional)..."
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                          rows={2}
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setMostrarFormCancelamento(false)
+                            setAutorizacaoParaCancelar(null)
+                            setDadosCancelamento({
+                              motivo: "",
+                              observacoes: "",
+                            })
+                          }}
+                          disabled={loadingEvolucao}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          onClick={cancelarBeneficio}
+                          disabled={loadingEvolucao}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          {loadingEvolucao ? "Cancelando..." : "Confirmar Cancelamento"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {autorizacoes.length > 0 ? (
                   <div className="space-y-4">
                     {autorizacoes.map((autorizacao) => (
@@ -1145,9 +1310,24 @@ const VisualizarFamilia: React.FC = () => {
                               {autorizacao.validade_meses === 1 ? "mês" : "meses"}
                             </p>
                           </div>
-                          <Badge className={getStatusBadgeClass(autorizacao.status)}>
-                            {formatarStatusAutorizacao(autorizacao.status)}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge className={getStatusBadgeClass(autorizacao.status)}>
+                              {formatarStatusAutorizacao(autorizacao.status)}
+                            </Badge>
+                            {/* Adicionando botão de cancelamento para autorizações ativas ou utilizadas */}
+                            {podeAutorizar &&
+                              (autorizacao.status === "ativa" || autorizacao.status === "utilizada") && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => abrirFormCancelamento(autorizacao)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Ban className="h-4 w-4 mr-1" />
+                                  Cancelar
+                                </Button>
+                              )}
+                          </div>
                         </div>
                         <div className="text-sm text-gray-700 space-y-1">
                           <p>
