@@ -388,16 +388,52 @@ CREATE TABLE IF NOT EXISTS autorizacoes_beneficios (
     INDEX idx_autorizacoes_tipo (tipo_beneficio),
     INDEX idx_autorizacoes_validade (data_validade),
     INDEX idx_autorizacoes_autorizador (autorizador_id)
+    
 );
 
-ALTER TABLE autorizacoes_beneficios
-ADD COLUMN motivo_cancelamento TEXT NULL COMMENT 'Motivo do cancelamento do benefício',
-ADD COLUMN observacoes_cancelamento TEXT NULL COMMENT 'Observações adicionais sobre o cancelamento',
-ADD COLUMN cancelado_por INT NULL COMMENT 'ID do usuário que cancelou o benefício',
-ADD COLUMN data_cancelamento DATETIME NULL COMMENT 'Data e hora do cancelamento',
-ADD CONSTRAINT fk_autorizacoes_cancelado_por FOREIGN KEY (cancelado_por) REFERENCES usuarios(id);
-
-CREATE INDEX idx_autorizacoes_cancelado_por ON autorizacoes_beneficios(cancelado_por);
+-- Tabela para registrar histórico de edições de benefícios
+CREATE TABLE IF NOT EXISTS edicoes_beneficios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    autorizacao_id INT NOT NULL,
+    familia_id INT NOT NULL,
+    editado_por INT NOT NULL COMMENT 'ID do usuário que fez a edição',
+    
+    -- Dados anteriores
+    tipo_beneficio_anterior ENUM('cesta_basica', 'auxilio_funeral', 'auxilio_natalidade', 'passagem', 'outro') NOT NULL,
+    quantidade_anterior INT NOT NULL,
+    validade_meses_anterior INT NOT NULL,
+    data_validade_anterior DATE NOT NULL,
+    justificativa_anterior TEXT NOT NULL,
+    observacoes_anterior TEXT,
+    
+    -- Dados novos
+    tipo_beneficio_novo ENUM('cesta_basica', 'auxilio_funeral', 'auxilio_natalidade', 'passagem', 'outro') NOT NULL,
+    quantidade_nova INT NOT NULL,
+    validade_meses_nova INT NOT NULL,
+    data_validade_nova DATE NOT NULL,
+    justificativa_nova TEXT NOT NULL,
+    observacoes_nova TEXT,
+    
+    -- Metadados
+    motivo_edicao TEXT NOT NULL COMMENT 'Motivo da edição',
+    data_edicao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (autorizacao_id) REFERENCES autorizacoes_beneficios(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    FOREIGN KEY (editado_por) REFERENCES usuarios(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+        
+    INDEX idx_edicoes_autorizacao (autorizacao_id),
+    INDEX idx_edicoes_familia (familia_id),
+    INDEX idx_edicoes_data (data_edicao),
+    INDEX idx_edicoes_editado_por (editado_por)
+);
 
 
 -- Tabela para benefícios concedidos
@@ -701,3 +737,13 @@ VALUES ("CAPS");
 
 INSERT INTO local_encaminhamento (nome)
 VALUES ("Hospital");
+
+USE spas_db;
+ALTER TABLE autorizacoes_beneficios
+ADD COLUMN motivo_cancelamento TEXT NULL COMMENT 'Motivo do cancelamento do benefício',
+ADD COLUMN observacoes_cancelamento TEXT NULL COMMENT 'Observações adicionais sobre o cancelamento',
+ADD COLUMN cancelado_por INT NULL COMMENT 'ID do usuário que cancelou o benefício',
+ADD COLUMN data_cancelamento DATETIME NULL COMMENT 'Data e hora do cancelamento',
+ADD CONSTRAINT fk_autorizacoes_cancelado_por FOREIGN KEY (cancelado_por) REFERENCES usuarios(id);
+
+CREATE INDEX idx_autorizacoes_cancelado_por ON autorizacoes_beneficios(cancelado_por);

@@ -2607,4 +2607,261 @@ router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
   }
 })
 
+router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/editar", verifyToken, async (req, res) => {
+  console.log("✏️ Editando autorização:", req.params.autorizacaoId)
+
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+    const autorizacao_id = Number.parseInt(req.params.autorizacaoId)
+    const usuario_id = req.userId
+    const { tipo_beneficio, quantidade, validade_meses, justificativa, observacoes, motivo_edicao } = req.body
+
+    if (isNaN(familia_id) || isNaN(autorizacao_id)) {
+      return res.status(400).json({ message: "ID inválido" })
+    }
+
+    // Validações
+    if (!tipo_beneficio || !quantidade || !validade_meses || !justificativa || !motivo_edicao) {
+      return res.status(400).json({ message: "Todos os campos obrigatórios devem ser preenchidos" })
+    }
+
+    if (quantidade < 1) {
+      return res.status(400).json({ message: "Quantidade deve ser maior que zero" })
+    }
+
+    if (validade_meses < 1) {
+      return res.status(400).json({ message: "Validade deve ser maior que zero" })
+    }
+
+    // Verificar se a autorização existe e pertence à família
+    const [autorizacao] = await db.query(`SELECT * FROM autorizacoes_beneficios WHERE id = ? AND familia_id = ?`, [
+      autorizacao_id,
+      familia_id,
+    ])
+
+    if (autorizacao.length === 0) {
+      return res.status(404).json({ message: "Autorização não encontrada" })
+    }
+
+    // Verificar se a autorização está ativa
+    if (autorizacao[0].status !== "ativa") {
+      return res.status(400).json({
+        message: "Somente autorizações ativas podem ser editadas",
+      })
+    }
+
+    // Verificar se a nova quantidade é menor que a quantidade já utilizada
+    if (quantidade < autorizacao[0].quantidade_utilizada) {
+      return res.status(400).json({
+        message: `A quantidade não pode ser menor que a quantidade já utilizada (${autorizacao[0].quantidade_utilizada})`,
+      })
+    }
+
+    // Calcular nova data de validade
+    const data_autorizacao = new Date(autorizacao[0].data_autorizacao)
+    const nova_data_validade = new Date(data_autorizacao)
+    nova_data_validade.setMonth(nova_data_validade.getMonth() + validade_meses)
+
+    // Atualizar a autorização
+    await db.query(
+      `
+      UPDATE autorizacoes_beneficios
+      SET
+        tipo_beneficio = ?,
+        quantidade = ?,
+        validade_meses = ?,
+        data_validade = ?,
+        justificativa = ?,
+        observacoes = ?,
+        updated_at = NOW()
+      WHERE id = ?
+      `,
+      [
+        tipo_beneficio,
+        quantidade,
+        validade_meses,
+        nova_data_validade,
+        justificativa,
+        observacoes || "",
+        autorizacao_id,
+      ],
+    )
+
+    // Registrar a edição em uma evolução
+    await db.query(
+      `
+      INSERT INTO evolucoes (familia_id, usuario_id, data_evolucao, hora_evolucao, descricao)
+      VALUES (?, ?, CURDATE(), CURTIME(), ?)
+      `,
+      [
+        familia_id,
+        usuario_id,
+        `EDIÇÃO DE AUTORIZAÇÃO DE BENEFÍCIO\n\nTipo: ${tipo_beneficio}\nQuantidade: ${quantidade}\nValidade: ${validade_meses} meses\nMotivo da edição: ${motivo_edicao}\nJustificativa: ${justificativa}${observacoes ? `\nObservações: ${observacoes}` : ""}`,
+      ],
+    )
+
+    // Buscar dados atualizados para retornar
+    const [autorizacaoAtualizada] = await db.query(
+      `
+      SELECT
+        ab.*,
+        u.nome as autorizador_nome,
+        c.nome as autorizador_cargo
+      FROM autorizacoes_beneficios ab
+      LEFT JOIN usuarios u ON ab.autorizador_id = u.id
+      LEFT JOIN cargos c ON u.cargo_id = c.id
+      WHERE ab.id = ?
+      `,
+      [autorizacao_id],
+    )
+
+    console.log("✅ Autorização editada com sucesso")
+
+    res.json({
+      message: "Autorização editada com sucesso",
+      autorizacao: autorizacaoAtualizada[0],
+      dados_anteriores: autorizacao[0],
+    })
+  } catch (error) {
+    console.error("❌ Erro ao editar autorização:", error)
+    res.status(500).json({
+      message: "Erro ao editar autorização",
+      error: error.message,
+    })
+  } finally {
+    if (db) await db.end()
+  }
+})
+
+router.put("/autorizacoes-beneficios/:id", verifyToken, async (req, res) => {
+  console.log("✏️ Rota PUT /autorizacoes-beneficios/:id chamada")
+  console.log("📦 Dados recebidos:", req.body)
+
+  let db
+  try {
+    db = await connectToDatabase()
+    const autorizacao_id = Number.parseInt(req.params.id)
+    const usuario_id = req.userId
+
+    const { tipo_beneficio, quantidade, validade_meses, justificativa, observacoes, motivo_edicao } = req.body
+
+    // Validações
+    if (!tipo_beneficio || !quantidade || !validade_meses || !justificativa || !motivo_edicao) {
+      return res.status(400).json({
+        message:
+          "Campos obrigatórios não preenchidos (tipo_beneficio, quantidade, validade_meses, justificativa, motivo_edicao).",
+      })
+    }
+
+    if (quantidade < 1) {
+      return res.status(400).json({ message: "Quantidade deve ser no mínimo 1." })
+    }
+
+    if (validade_meses < 1) {
+      return res.status(400).json({ message: "Validade deve ser no mínimo 1 mês." })
+    }
+
+    // Buscar autorização atual
+    const [autorizacaoAtual] = await db.query(
+      `SELECT * FROM autorizacoes_beneficios WHERE id = ? AND status = 'ativa'`,
+      [autorizacao_id],
+    )
+
+    if (autorizacaoAtual.length === 0) {
+      return res.status(404).json({ message: "Autorização não encontrada ou não está ativa." })
+    }
+
+    const autorizacao = autorizacaoAtual[0]
+
+    // Calcular nova data de validade
+    const data_autorizacao = new Date(autorizacao.data_autorizacao)
+    const nova_data_validade = new Date(data_autorizacao)
+    nova_data_validade.setMonth(nova_data_validade.getMonth() + Number.parseInt(validade_meses))
+    const nova_data_validade_str = nova_data_validade.toISOString().split("T")[0]
+
+    // Iniciar transação
+    await db.query("START TRANSACTION")
+
+    try {
+      // Registrar a edição no histórico
+      await db.query(
+        `INSERT INTO edicoes_beneficios (
+          autorizacao_id, familia_id, editado_por,
+          tipo_beneficio_anterior, quantidade_anterior, validade_meses_anterior,
+          data_validade_anterior, justificativa_anterior, observacoes_anterior,
+          tipo_beneficio_novo, quantidade_nova, validade_meses_nova,
+          data_validade_nova, justificativa_nova, observacoes_nova,
+          motivo_edicao, data_edicao
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          autorizacao_id,
+          autorizacao.familia_id,
+          usuario_id,
+          autorizacao.tipo_beneficio,
+          autorizacao.quantidade,
+          autorizacao.validade_meses,
+          autorizacao.data_validade,
+          autorizacao.justificativa,
+          autorizacao.observacoes,
+          tipo_beneficio,
+          quantidade,
+          validade_meses,
+          nova_data_validade_str,
+          justificativa,
+          observacoes,
+          motivo_edicao,
+        ],
+      )
+
+      // Atualizar a autorização
+      await db.query(
+        `UPDATE autorizacoes_beneficios
+         SET tipo_beneficio = ?, quantidade = ?, validade_meses = ?,
+             data_validade = ?, justificativa = ?, observacoes = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [
+          tipo_beneficio,
+          quantidade,
+          validade_meses,
+          nova_data_validade_str,
+          justificativa,
+          observacoes,
+          autorizacao_id,
+        ],
+      )
+
+      // Registrar na evolução
+      await db.query(
+        `INSERT INTO evolucoes (familia_id, usuario_id, data_evolucao, hora_evolucao, descricao)
+         VALUES (?, ?, CURDATE(), CURTIME(), ?)`,
+        [
+          autorizacao.familia_id,
+          usuario_id,
+          `Autorização de benefício editada. Tipo: ${tipo_beneficio}, Quantidade: ${quantidade}, Validade: ${validade_meses} meses. Motivo: ${motivo_edicao}`,
+        ],
+      )
+
+      await db.query("COMMIT")
+
+      console.log("✅ Autorização editada com sucesso!")
+      res.status(200).json({
+        message: "Autorização editada com sucesso!",
+        autorizacao_id: autorizacao_id,
+      })
+    } catch (error) {
+      await db.query("ROLLBACK")
+      throw error
+    }
+  } catch (error) {
+    console.error("❌ Erro ao editar autorização:", error)
+    res.status(500).json({
+      message: "Erro ao editar autorização",
+      error: error.message,
+    })
+  }
+})
+
 export default router
