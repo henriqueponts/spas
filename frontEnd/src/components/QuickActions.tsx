@@ -47,7 +47,7 @@ const QuickActions: React.FC = () => {
     {
       id: "user-management",
       title: "Gestão de Usuários",
-      description: "Criar/Alterar/Inativar usuários do sistema",
+      description: "Criar/Inativar usuários do sistema",
       icon: <UserCog size={24} />,
       color: "orange",
       onClick: () => navigate("/usuarios"), // <-- Correto

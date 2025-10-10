@@ -120,7 +120,7 @@ const Usuarios: React.FC = () => {
       setUsuarios(usuarios.map((u) => (u.id === usuarioId ? { ...u, ativo: !u.ativo } : u)))
     } catch (error) {
       console.error("Erro ao alterar status:", error)
-      alert("Erro ao alterar status do usuário")
+      alert("Não foi possível alterar o status do usuário.")
     }
   }
 
@@ -258,7 +258,7 @@ const Usuarios: React.FC = () => {
                 <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Buscar por nome, CPF, email ou cargo..."
+                  placeholder="Buscar por nome, CPF ou cargo..."
                   value={termoBusca}
                   onChange={(e) => setTermoBusca(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

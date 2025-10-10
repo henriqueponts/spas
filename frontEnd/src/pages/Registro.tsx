@@ -16,9 +16,13 @@ interface Equipamento {
   id: number
   nome: string
 }
+// ✅ MODIFICADO: Adicionado nome, cargo e equipamento para validação de erros
 interface FormErrors {
+  nome?: string
   cpf?: string
   senha?: string
+  cargo?: string
+  equipamento?: string
 }
 
 const Registro: React.FC = () => {
@@ -98,6 +102,11 @@ const Registro: React.FC = () => {
   const handleChanges = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void => {
     const { name, value } = e.target
 
+    // ✅ MODIFICADO: Limpa o erro do campo específico ao ser alterado
+    if (errors[name as keyof FormErrors]) {
+      setErrors((prev) => ({ ...prev, [name]: undefined }))
+    }
+
     if (name === "cpf") {
       const formattedValue = formatCPF(value)
       setFormattedCPF(formattedValue)
@@ -121,16 +130,33 @@ const Registro: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
 
+    // ✅ MODIFICADO: Validação centralizada para todos os campos
     const cpfValid = validateCPF(values.cpf)
     const passwordError = validatePassword(values.senha)
+    const newErrors: FormErrors = {}
 
-    if (!cpfValid || passwordError) {
-      setErrors({
-        cpf: !cpfValid ? "CPF inválido" : undefined,
-        senha: passwordError,
-      })
+    if (!values.nome.trim()) {
+      newErrors.nome = "O campo Nome é obrigatório"
+    }
+    if (!cpfValid) {
+      newErrors.cpf = "CPF inválido"
+    }
+    if (passwordError) {
+      newErrors.senha = passwordError
+    }
+    if (!values.cargo) {
+      newErrors.cargo = "Por favor, selecione um cargo"
+    }
+    if (!values.equipamento) {
+      newErrors.equipamento = "Por favor, selecione um equipamento"
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
       return
     }
+
+    setErrors({}) // Limpa os erros se a validação passar
 
     try {
       // Usa a instância 'api' para enviar o token na requisição de registro
@@ -189,9 +215,12 @@ const Registro: React.FC = () => {
                 value={values.nome}
                 onChange={handleChanges}
                 placeholder="Nome completo do usuário"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                // ✅ MODIFICADO: Adiciona borda de erro condicionalmente
+                className={`w-full px-3 py-2 border ${errors.nome ? "border-red-500" : "border-gray-300"} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 required
               />
+              {/* ✅ ADICIONADO: Exibe a mensagem de erro para o campo nome */}
+              {errors.nome && <p className="mt-1 text-sm text-red-600">{errors.nome}</p>}
             </div>
             <div className="mb-4">
               <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-1">
@@ -218,7 +247,8 @@ const Registro: React.FC = () => {
                 name="cargo"
                 value={values.cargo}
                 onChange={handleChanges}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                // ✅ MODIFICADO: Adiciona borda de erro condicionalmente
+                className={`w-full px-3 py-2 border ${errors.cargo ? "border-red-500" : "border-gray-300"} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 required
               >
                 <option value="" disabled>
@@ -230,6 +260,8 @@ const Registro: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {/* ✅ ADICIONADO: Exibe a mensagem de erro para o campo cargo */}
+              {errors.cargo && <p className="mt-1 text-sm text-red-600">{errors.cargo}</p>}
             </div>
             <div className="mb-4">
               <label htmlFor="equipamento" className="block text-sm font-medium text-gray-700 mb-1">
@@ -240,7 +272,8 @@ const Registro: React.FC = () => {
                 name="equipamento"
                 value={values.equipamento}
                 onChange={handleChanges}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                // ✅ MODIFICADO: Adiciona borda de erro condicionalmente
+                className={`w-full px-3 py-2 border ${errors.equipamento ? "border-red-500" : "border-gray-300"} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 required
               >
                 <option value="" disabled>
@@ -252,6 +285,8 @@ const Registro: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {/* ✅ ADICIONADO: Exibe a mensagem de erro para o campo equipamento */}
+              {errors.equipamento && <p className="mt-1 text-sm text-red-600">{errors.equipamento}</p>}
             </div>
             <div className="mb-6">
               <label htmlFor="senha" className="block text-sm font-medium text-gray-700 mb-1">

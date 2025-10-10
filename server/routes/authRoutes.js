@@ -11,6 +11,17 @@ router.post("/registro", async (req, res) => {
 
   const { nome, cpf, email, cargo, equipamento, senha } = req.body
 
+  // ✅ ADICIONADO: Validações de campos obrigatórios no backend
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ message: "O campo Nome é obrigatório." })
+  }
+  if (!cargo) {
+    return res.status(400).json({ message: "Por favor, selecione um cargo." })
+  }
+  if (!equipamento) {
+    return res.status(400).json({ message: "Por favor, selecione um equipamento." })
+  }
+
   try {
     const db = await connectToDatabase()
 
