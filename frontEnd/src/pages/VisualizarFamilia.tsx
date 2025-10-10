@@ -843,17 +843,6 @@ const VisualizarFamilia: React.FC = () => {
                 <InfoItem label="Data de Cadastro" value={formatarData(familia.data_cadastro)} />
                 <InfoItem label="Último Atendimento" value={formatarData(familia.data_atendimento)} />
                 <InfoItem label="Prontuário" value={familia.prontuario} />
-                <InfoItem label="Situação">
-                  <Badge
-                    className={
-                      familia.situacao.toLowerCase() === "ativo"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }
-                  >
-                    {familia.situacao}
-                  </Badge>
-                </InfoItem>
               </dl>
             </CardContent>
           </Card>
@@ -1582,7 +1571,7 @@ const VisualizarFamilia: React.FC = () => {
                             )}
                             {/* Adicionando botão de cancelamento para autorizações ativas ou utilizadas */}
                             {podeAutorizar &&
-                              (autorizacao.status === "ativa" || autorizacao.status === "utilizada") && (
+                              (autorizacao.status === "ativa") && (
                                 <Button
                                   variant="outline"
                                   size="sm"

@@ -2129,8 +2129,8 @@ router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/cancelar", veri
       return res.status(404).json({ message: "Autorização não encontrada" })
     }
 
-    if (autorizacao[0].status === "cancelada") {
-      return res.status(400).json({ message: "Esta autorização já está cancelada" })
+    if (autorizacao[0].status !== "ativa") {
+      return res.status(400).json({ message: "Apenas autorizações ativas podem ser canceladas. O status atual é: " + autorizacao[0].status })
     }
 
     await db.query(
@@ -2402,19 +2402,7 @@ router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/editar", verify
         autorizacao_id,
       ],
     )
-
-    await db.query(
-      `
-      INSERT INTO evolucoes (familia_id, usuario_id, data_evolucao, hora_evolucao, descricao)
-      VALUES (?, ?, CURDATE(), CURTIME(), ?)
-      `,
-      [
-        familia_id,
-        usuario_id,
-        `EDIÇÃO DE AUTORIZAÇÃO DE BENEFÍCIO\n\nTipo: ${tipo_beneficio}\nQuantidade: ${quantidade}\nValidade: ${validade_meses} meses\nMotivo da edição: ${motivo_edicao}\nJustificativa: ${justificativa}${observacoes ? `\nObservações: ${observacoes}` : ""}`,
-      ],
-    )
-
+    
     const [autorizacaoAtualizada] = await db.query(
       `
       SELECT
