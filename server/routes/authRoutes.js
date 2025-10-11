@@ -228,7 +228,6 @@ router.get("/familias", verifyToken, async (req, res) => {
                 f.prontuario,
                 f.data_cadastro,
                 f.data_atendimento,
-                f.situacao,
                 e.nome as equipamento_nome,
                 e.regiao as equipamento_regiao,
                 u.nome as profissional_nome
@@ -258,7 +257,7 @@ router.get("/familias", verifyToken, async (req, res) => {
 
       // Buscar integrantes
       const [integrantes] = await db.query(
-        'SELECT nome_completo, tipo_membro FROM pessoas WHERE familia_id = ? AND tipo_membro != "responsavel"',
+        'SELECT nome_completo, tipo_membro, cpf FROM pessoas WHERE familia_id = ? AND tipo_membro != "responsavel"', // <-- ADICIONADO `cpf` AQUI
         [familia.id],
       )
 
@@ -272,7 +271,6 @@ router.get("/familias", verifyToken, async (req, res) => {
         prontuario: familia.prontuario,
         data_cadastro: familia.data_cadastro,
         data_atendimento: familia.data_atendimento,
-        situacao: familia.situacao,
         equipamento_nome: familia.equipamento_nome,
         equipamento_regiao: familia.equipamento_regiao,
         profissional_nome: familia.profissional_nome,
@@ -374,9 +372,10 @@ router.post("/familias", verifyToken, async (req, res) => {
   console.log("🔑 User ID do token:", req.userId)
   console.log("📦 Body recebido:", JSON.stringify(req.body, null, 2))
 
-  const db = await connectToDatabase()
+  let db // <-- CORREÇÃO: Variável declarada fora do try
 
   try {
+    db = await connectToDatabase() // <-- CORREÇÃO: Atribuída dentro do try
     console.log("🔄 Iniciando transação...")
     await db.beginTransaction()
 
@@ -422,9 +421,8 @@ router.post("/familias", verifyToken, async (req, res) => {
                 equipamento_id,
                 data_cadastro,
                 data_atendimento,
-                profissional_id,
-                situacao
-            ) VALUES (?, CURDATE(), ?, ?, 'ativo')
+                profissional_id
+            ) VALUES (?, CURDATE(), ?, ?)
         `,
       [equipamento_id, data_atendimento, profissional_id],
     )
@@ -515,11 +513,7 @@ router.post("/familias", verifyToken, async (req, res) => {
 
     // 5. Inserir dados de habitação
     console.log("🏡 Inserindo dados de habitação...")
-    const tipo_construcao_str = Array.isArray(habitacao?.tipo_construcao) ? habitacao.tipo_construcao.join(",") : ""
-    const condicao_domicilio_str = Array.isArray(habitacao?.condicao_domicilio)
-      ? habitacao.condicao_domicilio.join(",")
-      : ""
-
+    // <-- CORREÇÃO: Lógica antiga de array removida
     await db.query(
       `
             INSERT INTO habitacao (
@@ -531,13 +525,13 @@ router.post("/familias", verifyToken, async (req, res) => {
         familia_id,
         habitacao?.qtd_comodos || 0,
         habitacao?.qtd_dormitorios || 0,
-        tipo_construcao_str,
+        habitacao?.tipo_construcao || "alvenaria", // <-- CORREÇÃO: Passando o valor string diretamente
         habitacao?.area_conflito || false,
-        condicao_domicilio_str,
+        habitacao?.condicao_domicilio || "propria_quitada", // <-- CORREÇÃO: Passando o valor string diretamente
         habitacao?.energia_eletrica || "propria",
         habitacao?.agua || "propria",
         habitacao?.esgoto || "rede",
-        habitacao?.coleta_lixo || true,
+        habitacao?.coleta_lixo !== undefined ? habitacao.coleta_lixo : true,
       ],
     )
     console.log("✅ Dados de habitação inseridos")
@@ -675,7 +669,9 @@ router.post("/familias", verifyToken, async (req, res) => {
     })
   } catch (error) {
     console.log("❌ Erro no cadastro, fazendo rollback...")
-    await db.rollback()
+    if (db) { // <-- CORREÇÃO: Verifica se 'db' existe antes do rollback
+      await db.rollback()
+    }
     console.error("💥 Erro detalhado:", error)
 
     if (error.code === "ER_DUP_ENTRY") {
@@ -952,7 +948,6 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
       prontuario: familia.prontuario,
       data_cadastro: familia.data_cadastro,
       data_atendimento: familia.data_atendimento,
-      situacao: familia.situacao,
       profissional_id: familia.profissional_id,
       equipamento_id: familia.equipamento_id,
       equipamento: {
@@ -988,7 +983,7 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
         energia_eletrica: habitacao.energia_eletrica || "propria",
         agua: habitacao.agua || "propria",
         esgoto: habitacao.esgoto || "rede",
-        coleta_lixo: habitacao.coleta_lixo || true,
+        coleta_lixo: habitacao.coleta_lixo !== undefined ? !!habitacao.coleta_lixo : true,
       },
       trabalho_renda: trabalhoRendaResult[0] || {
         quem_trabalha: "",
@@ -1031,9 +1026,11 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
 router.put("/familias/:id", verifyToken, async (req, res) => {
   console.log("🔄 ROTA PUT /familias/:id CHAMADA!")
 
-  const db = await connectToDatabase()
+  let db // <-- CORREÇÃO: Variável declarada fora do try
 
   try {
+    db = await connectToDatabase() // <-- CORREÇÃO: Atribuída dentro do try
+
     const familia_id = Number.parseInt(req.params.id)
 
     if (isNaN(familia_id)) {
@@ -1167,11 +1164,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     )
 
     // 5. Atualizar dados de habitação
-    const tipo_construcao_str = Array.isArray(habitacao?.tipo_construcao) ? habitacao.tipo_construcao.join(",") : ""
-    const condicao_domicilio_str = Array.isArray(habitacao?.condicao_domicilio)
-      ? habitacao.condicao_domicilio.join(",")
-      : ""
-
+    // <-- CORREÇÃO: Lógica antiga de array removida
     await db.query(
       `
             UPDATE habitacao SET
@@ -1183,13 +1176,13 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
       [
         habitacao?.qtd_comodos || 0,
         habitacao?.qtd_dormitorios || 0,
-        tipo_construcao_str,
+        habitacao?.tipo_construcao || "alvenaria", // <-- CORREÇÃO: Passando o valor string diretamente
         habitacao?.area_conflito || false,
-        condicao_domicilio_str,
+        habitacao?.condicao_domicilio || "propria_quitada", // <-- CORREÇÃO: Passando o valor string diretamente
         habitacao?.energia_eletrica || "propria",
         habitacao?.agua || "propria",
         habitacao?.esgoto || "rede",
-        habitacao?.coleta_lixo || true,
+        habitacao?.coleta_lixo !== undefined ? habitacao.coleta_lixo : true,
         familia_id,
       ],
     )
@@ -1315,7 +1308,9 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
       familia_id: familia_id,
     })
   } catch (error) {
-    await db.rollback()
+    if (db) { // <-- CORREÇÃO: Verifica se 'db' existe antes do rollback
+      await db.rollback()
+    }
     console.error("💥 Erro detalhado:", error)
 
     if (error.code === "ER_DUP_ENTRY") {
@@ -2141,7 +2136,9 @@ router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/cancelar", veri
     }
 
     if (autorizacao[0].status !== "ativa") {
-      return res.status(400).json({ message: "Apenas autorizações ativas podem ser canceladas. O status atual é: " + autorizacao[0].status })
+      return res.status(400).json({
+        message: "Apenas autorizações ativas podem ser canceladas. O status atual é: " + autorizacao[0].status,
+      })
     }
 
     await db.query(
@@ -2413,7 +2410,7 @@ router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/editar", verify
         autorizacao_id,
       ],
     )
-    
+
     const [autorizacaoAtualizada] = await db.query(
       `
       SELECT

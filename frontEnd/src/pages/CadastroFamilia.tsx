@@ -1886,7 +1886,7 @@ const CadastroFamilia: React.FC = () => {
           </Card>
         )
 
-      case 4: // Renda
+case 4: // Renda
         return (
           <Card>
             <CardHeader>
@@ -1925,17 +1925,21 @@ const CadastroFamilia: React.FC = () => {
                 </label>
                 <input
                   type="number"
+                  min="0" // ADICIONADO
                   placeholder="R$ 0,00"
                   value={dadosFamilia.trabalho_renda.rendimento_total}
                   onChange={(e) =>
                     setDadosFamilia((prev) => ({
                       ...prev,
-                      trabalho_renda: { ...prev.trabalho_renda, rendimento_total: Number(e.target.value) },
+                      trabalho_renda: { 
+                        ...prev.trabalho_renda,
+                        // CORREÇÃO: Garante que o valor não seja negativo
+                        rendimento_total: Math.max(0, Number(e.target.value)) 
+                      },
                     }))
                   }
                   className={getInputClass(errors.trabalho_renda?.rendimento_total)}
                 />
-                {renderError(errors.trabalho_renda?.rendimento_total)}
               </div>
 
               <div>
@@ -1957,6 +1961,111 @@ const CadastroFamilia: React.FC = () => {
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              <Separator />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Programas de transferência de renda recebidos
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {programasSociais.map((programa) => (
+                    <div key={programa.id} className="space-y-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={dadosFamilia.programas_sociais.some((p) => p.programa_id === programa.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setDadosFamilia((prev) => ({
+                                ...prev,
+                                programas_sociais: [
+                                  ...prev.programas_sociais,
+                                  { programa_id: programa.id, valor: programa.valor_padrao },
+                                ],
+                              }))
+                            } else {
+                              setDadosFamilia((prev) => ({
+                                ...prev,
+                                programas_sociais: prev.programas_sociais.filter((p) => p.programa_id !== programa.id),
+                              }))
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">
+                          {programa.nome} ({programa.codigo})
+                        </span>
+                      </label>
+                      {dadosFamilia.programas_sociais.some((p) => p.programa_id === programa.id) && (
+                        <input
+                          type="number"
+                          min="0" // ADICIONADO
+                          placeholder="Valor recebido"
+                          value={dadosFamilia.programas_sociais.find((p) => p.programa_id === programa.id)?.valor || 0}
+                          onChange={(e) => {
+                            // CORREÇÃO: Garante que o valor não seja negativo
+                            const valor = Math.max(0, Number.parseFloat(e.target.value) || 0);
+                            setDadosFamilia((prev) => ({
+                              ...prev,
+                              programas_sociais: prev.programas_sociais.map((p) =>
+                                p.programa_id === programa.id ? { ...p, valor } : p,
+                              ),
+                            }))
+                          }}
+                          className="ml-6 max-w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Despesas mensais</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {tiposDespesas.map((tipo) => (
+                    <div key={tipo.id}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {tipo.nome} {tipo.obrigatoria && <span className="text-red-500">*</span>}
+                      </label>
+                      <input
+                        type="number"
+                        min="0" // ADICIONADO
+                        placeholder="R$ 0,00"
+                        value={dadosFamilia.despesas.find((d) => d.tipo_despesa_id === tipo.id)?.valor || ""}
+                        onChange={(e) => {
+                          // CORREÇÃO: Garante que o valor não seja negativo
+                          const valor = Math.max(0, Number.parseFloat(e.target.value) || 0);
+                          setDadosFamilia((prev) => {
+                            const despesaExiste = prev.despesas.some((d) => d.tipo_despesa_id === tipo.id)
+                            let novasDespesas
+
+                            if (despesaExiste) {
+                              novasDespesas = prev.despesas.map((d) =>
+                                d.tipo_despesa_id === tipo.id ? { ...d, valor } : d,
+                              )
+                            } else {
+                              novasDespesas = [...prev.despesas, { tipo_despesa_id: tipo.id, valor }]
+                            }
+                            // Filtra para remover despesas com valor 0 que não sejam obrigatórias
+                            return {
+                              ...prev,
+                              despesas: novasDespesas.filter(d => {
+                                const tipoDespesa = tiposDespesas.find(t => t.id === d.tipo_despesa_id)
+                                return d.valor > 0 || (tipoDespesa && tipoDespesa.obrigatoria)
+                              })
+                            }
+                          })
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>

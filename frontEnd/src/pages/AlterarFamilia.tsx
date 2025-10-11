@@ -1853,6 +1853,7 @@ const validarFormularioCompleto = (): boolean => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Rendimento familiar total</label>
                 <input
                   type="number"
+                  min="0" // ADICIONADO
                   placeholder="R$ 0,00"
                   value={dadosFamilia.trabalho_renda.rendimento_total}
                   onChange={(e) =>
@@ -1860,7 +1861,8 @@ const validarFormularioCompleto = (): boolean => {
                       ...prev,
                       trabalho_renda: {
                         ...prev.trabalho_renda,
-                        rendimento_total: Number.parseFloat(e.target.value) || 0,
+                        // CORREÇÃO: Garante que o valor não seja negativo
+                        rendimento_total: Math.max(0, Number.parseFloat(e.target.value) || 0),
                       },
                     }))
                   }
@@ -1924,10 +1926,12 @@ const validarFormularioCompleto = (): boolean => {
                       {dadosFamilia.programas_sociais.some((p) => p.programa_id === programa.id) && (
                         <input
                           type="number"
+                          min="0" // ADICIONADO
                           placeholder="Valor recebido"
                           value={dadosFamilia.programas_sociais.find((p) => p.programa_id === programa.id)?.valor || 0}
                           onChange={(e) => {
-                            const valor = Number.parseFloat(e.target.value) || 0
+                             // CORREÇÃO: Garante que o valor não seja negativo
+                              const valor = Math.max(0, Number.parseFloat(e.target.value) || 0)
                             setDadosFamilia((prev) => ({
                               ...prev,
                               programas_sociais: prev.programas_sociais.map((p) =>
@@ -1955,10 +1959,12 @@ const validarFormularioCompleto = (): boolean => {
                       </label>
                       <input
                         type="number"
+                        min="0" // ADICIONADO
                         placeholder="R$ 0,00"
                         value={dadosFamilia.despesas.find((d) => d.tipo_despesa_id === tipo.id)?.valor || 0}
                         onChange={(e) => {
-                          const valor = Number.parseFloat(e.target.value) || 0
+                          // CORREÇÃO: Garante que o valor não seja negativo
+                          const valor = Math.max(0, Number.parseFloat(e.target.value) || 0);
                           setDadosFamilia((prev) => ({
                             ...prev,
                             despesas: prev.despesas
@@ -2118,48 +2124,109 @@ const validarFormularioCompleto = (): boolean => {
               <Separator />
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Acesso a serviços públicos</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {[
-                    { value: "saude", label: "Saúde" },
-                    { value: "educacao", label: "Educação" },
-                    { value: "assistencia_social", label: "Assistência Social" },
-                    { value: "cultura", label: "Cultura" },
-                    { value: "esporte", label: "Esporte" },
-                    { value: "lazer", label: "Lazer" },
-                  ].map((servico) => (
-                    <label key={servico.value} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={dadosFamilia.situacao_social.servicos_publicos.includes(servico.value)}
-                        onChange={(e) =>
-                          handleCheckboxChange("situacao_social", "servicos_publicos", servico.value, e.target.checked)
-                        }
-                        className="mr-2"
-                      />
-                      <span className="text-sm">{servico.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Observações sobre situação social
-                </label>
-                <textarea
-                  placeholder="Observações adicionais sobre a situação social"
-                  rows={4}
-                  value={dadosFamilia.situacao_social.observacoes}
-                  onChange={(e) =>
-                    setDadosFamilia((prev) => ({
-                      ...prev,
-                      situacao_social: { ...prev.situacao_social, observacoes: e.target.value },
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+                
+                                <label className="block text-sm font-medium text-gray-700 mb-3">Serviços Públicos Utilizados</label>
+                                <div className="flex flex-col gap-2">
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      value="cras"
+                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("cras")}
+                                      onChange={(e) =>
+                                        handleCheckboxChange("situacao_social", "servicos_publicos", "cras", e.target.checked)
+                                      }
+                                      className="mr-2"
+                                    />
+                                    CRAS
+                                  </label>
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      value="creas"
+                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("creas")}
+                                      onChange={(e) =>
+                                        handleCheckboxChange("situacao_social", "servicos_publicos", "creas", e.target.checked)
+                                      }
+                                      className="mr-2"
+                                    />
+                                    CREAS
+                                  </label>
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      value="saude"
+                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("saude")}
+                                      onChange={(e) =>
+                                        handleCheckboxChange("situacao_social", "servicos_publicos", "saude", e.target.checked)
+                                      }
+                                      className="mr-2"
+                                    />
+                                    Saúde (Posto de Saúde, UPA, etc.)
+                                  </label>
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      value="educacao"
+                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("educacao")}
+                                      onChange={(e) =>
+                                        handleCheckboxChange("situacao_social", "servicos_publicos", "educacao", e.target.checked)
+                                      }
+                                      className="mr-2"
+                                    />
+                                    Educação (Escola, Creche, etc.)
+                                  </label>
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      value="habitacao"
+                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("habitacao")}
+                                      onChange={(e) =>
+                                        handleCheckboxChange("situacao_social", "servicos_publicos", "habitacao", e.target.checked)
+                                      }
+                                      className="mr-2"
+                                    />
+                                    Habitação
+                                  </label>
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      value="assistencia_social"
+                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("assistencia_social")}
+                                      onChange={(e) =>
+                                        handleCheckboxChange(
+                                          "situacao_social",
+                                          "servicos_publicos",
+                                          "assistencia_social",
+                                          e.target.checked,
+                                        )
+                                      }
+                                      className="mr-2"
+                                    />
+                                    Outros de Assistência Social
+                                  </label>
+                                </div>
+                              </div>
+                
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
+                                <textarea
+                                  placeholder="Outras informações relevantes sobre a situação social da família"
+                                  value={dadosFamilia.situacao_social.observacoes}
+                                  onChange={(e) =>
+                                    setDadosFamilia((prev) => ({
+                                      ...prev,
+                                      situacao_social: { ...prev.situacao_social, observacoes: e.target.value },
+                                    }))
+                                  }
+                                  onBlur={(e) =>
+                                    setDadosFamilia((prev) => ({
+                                      ...prev,
+                                      situacao_social: { ...prev.situacao_social, observacoes: cleanExtraSpaces(e.target.value) },
+                                    }))
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
             </CardContent>
           </Card>
         )

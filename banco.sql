@@ -1,8 +1,8 @@
 -- ============================================
--- SISTEMA SPAS - BANCO DE DADOS CORRIGIDO
+-- SISTEMA SPAS - BANCO DE DADOS CORRIGIDO COM DEFAULTS
 -- ============================================
 
-CREATE DATABASE spas_db;
+CREATE DATABASE IF NOT EXISTS spas_db;
 USE spas_db;
 
 -- ============================================
@@ -17,9 +17,9 @@ CREATE TABLE equipamento (
     endereco VARCHAR(255),
     telefone VARCHAR(20),
     email VARCHAR(100),
-    ativo BOOLEAN NOT NULL,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
     INDEX idx_equipamento_ativo (ativo),
     INDEX idx_equipamento_regiao (regiao)
@@ -31,8 +31,8 @@ CREATE TABLE cargos (
     nome VARCHAR(50) NOT NULL UNIQUE,
     descricao TEXT NULL,
     nivel_acesso TINYINT NOT NULL COMMENT '1=Básico, 2=Intermediário, 3=Avançado, 4=Diretor',
-    ativo BOOLEAN,
-    created_at TIMESTAMP
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Tabela de usuários do sistema
@@ -44,17 +44,13 @@ CREATE TABLE usuarios (
     senha_hash VARCHAR(255) NOT NULL,
     cargo_id INT NOT NULL,
     equipamento_id INT NOT NULL,
-    ativo BOOLEAN,
+    ativo BOOLEAN DEFAULT TRUE,
     ultimo_login TIMESTAMP NULL,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (cargo_id) REFERENCES cargos(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
-    FOREIGN KEY (equipamento_id) REFERENCES equipamento(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
+    FOREIGN KEY (cargo_id) REFERENCES cargos(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (equipamento_id) REFERENCES equipamento(id) ON DELETE RESTRICT ON UPDATE CASCADE,
        
     INDEX idx_usuarios_cpf (cpf),
     INDEX idx_usuarios_ativo (ativo),
@@ -67,9 +63,9 @@ CREATE TABLE programas_sociais_disponiveis (
     codigo VARCHAR(10) NOT NULL UNIQUE,
     nome VARCHAR(100) NOT NULL,
     descricao TEXT,
-    valor_padrao DECIMAL(10,2),
-    ativo BOOLEAN,
-    created_at TIMESTAMP,
+    valor_padrao DECIMAL(10,2) DEFAULT 0.00,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    
     INDEX idx_programas_codigo (codigo),
     INDEX idx_programas_ativo (ativo)
@@ -81,9 +77,9 @@ CREATE TABLE tipos_despesas (
     codigo VARCHAR(20) NOT NULL UNIQUE,
     nome VARCHAR(50) NOT NULL,
     descricao TEXT,
-    obrigatoria BOOLEAN,
-    ativo BOOLEAN,
-    created_at TIMESTAMP
+    obrigatoria BOOLEAN DEFAULT FALSE,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 
@@ -95,23 +91,17 @@ CREATE TABLE familias (
     data_atendimento DATE NOT NULL COMMENT 'Data do atendimento que gerou o cadastro',
     prontuario VARCHAR(50) UNIQUE,
     profissional_id INT NOT NULL,
-    situacao ENUM('ativo', 'inativo', 'transferido', 'suspenso') NOT NULL,
     observacoes_gerais TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (equipamento_id) REFERENCES equipamento(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
-    FOREIGN KEY (profissional_id) REFERENCES usuarios(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
+    FOREIGN KEY (equipamento_id) REFERENCES equipamento(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (profissional_id) REFERENCES usuarios(id) ON DELETE RESTRICT ON UPDATE CASCADE,
        
     INDEX idx_familias_data_cadastro (data_cadastro),
     INDEX idx_familias_prontuario (prontuario),
     INDEX idx_familias_equipamento (equipamento_id),
-    INDEX idx_familias_profissional (profissional_id),
-    INDEX idx_familias_situacao (situacao)
+    INDEX idx_familias_profissional (profissional_id)
 );
 
 -- Tabela para pessoas (responsável familiar e membros)
@@ -120,14 +110,12 @@ CREATE TABLE pessoas (
     familia_id INT NOT NULL,
     nome_completo VARCHAR(255) NOT NULL,
     data_nascimento DATE NOT NULL,
-    sexo ENUM('feminino', 'masculino', 'outro') NOT NULL,
+    sexo ENUM('feminino', 'masculino', 'outro') NOT NULL DEFAULT 'outro',
     cpf VARCHAR(14) UNIQUE,
     rg VARCHAR(20),
     orgao_expedidor VARCHAR(20),
-    estado_civil ENUM('solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_estavel', 'separado'),
-    escolaridade ENUM('nao_alfabetizado', 'fundamental_incompleto', 'fundamental_completo',
-                     'medio_incompleto', 'medio_completo', 'superior_incompleto',
-                     'superior_completo', 'pos_graduacao'),
+    estado_civil ENUM('solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_estavel', 'separado') DEFAULT 'solteiro',
+    escolaridade ENUM('nao_alfabetizado', 'fundamental_incompleto', 'fundamental_completo', 'medio_incompleto', 'medio_completo', 'superior_incompleto', 'superior_completo', 'pos_graduacao') DEFAULT 'nao_alfabetizado',
     naturalidade VARCHAR(100),
     telefone VARCHAR(20),
     telefone_recado VARCHAR(20),
@@ -135,17 +123,14 @@ CREATE TABLE pessoas (
     nis VARCHAR(20),
     titulo_eleitor VARCHAR(20),
     ctps VARCHAR(20),
-    tipo_membro ENUM('responsavel', 'conjuge', 'filho', 'pai', 'mae', 'irmao', 'avo',
-                    'neto', 'sobrinho', 'tio', 'primo', 'outro') NOT NULL,
+    tipo_membro ENUM('responsavel', 'conjuge', 'filho', 'pai', 'mae', 'irmao', 'avo', 'neto', 'sobrinho', 'tio', 'primo', 'outro') NOT NULL,
     ocupacao VARCHAR(100),
-    renda_mensal DECIMAL(10,2),
-    ativo BOOLEAN,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    renda_mensal DECIMAL(10,2) DEFAULT 0.00,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
        
     INDEX idx_pessoas_familia (familia_id),
     INDEX idx_pessoas_cpf (cpf),
@@ -158,7 +143,7 @@ CREATE TABLE enderecos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL UNIQUE,
     logradouro VARCHAR(255) NOT NULL,
-    numero VARCHAR(20),
+    numero VARCHAR(20) DEFAULT '',
     complemento VARCHAR(100),
     bairro VARCHAR(100) NOT NULL,
     cidade VARCHAR(100) NOT NULL,
@@ -166,12 +151,10 @@ CREATE TABLE enderecos (
     cep VARCHAR(10),
     referencia VARCHAR(255),
     tempo_moradia VARCHAR(50),
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
        
     INDEX idx_enderecos_bairro (bairro),
     INDEX idx_enderecos_cidade (cidade),
@@ -182,21 +165,19 @@ CREATE TABLE enderecos (
 CREATE TABLE saude (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL UNIQUE,
-    tem_deficiencia BOOLEAN,
+    tem_deficiencia BOOLEAN DEFAULT FALSE,
     deficiencia_qual TEXT,
-    tem_tratamento_saude BOOLEAN,
+    tem_tratamento_saude BOOLEAN DEFAULT FALSE,
     tratamento_qual TEXT,
-    usa_medicacao_continua BOOLEAN,
+    usa_medicacao_continua BOOLEAN DEFAULT FALSE,
     medicacao_qual TEXT,
-    tem_dependente_cuidados BOOLEAN,
+    tem_dependente_cuidados BOOLEAN DEFAULT FALSE,
     dependente_quem VARCHAR(255),
     observacoes TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
        
     INDEX idx_saude_deficiencia (tem_deficiencia),
     INDEX idx_saude_tratamento (tem_tratamento_saude)
@@ -206,21 +187,19 @@ CREATE TABLE saude (
 CREATE TABLE habitacao (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL UNIQUE,
-    qtd_comodos INT,
-    qtd_dormitorios INT,
-    tipo_construcao ENUM('alvenaria', 'madeira', 'mista', 'taipa', 'outro'),
-    area_conflito BOOLEAN,
-    condicao_domicilio ENUM('propria_quitada', 'propria_financiada', 'alugada', 'cedida', 'ocupada', 'situacao_rua'),
-    energia_eletrica ENUM('propria', 'compartilhada', 'sem_medidor', 'nao_tem'),
-    agua ENUM('propria', 'compartilhada', 'rede_publica', 'poco', 'carro pipa', 'sem_medidor', 'nao_tem'),
-    esgoto ENUM('rede', 'fossa_septica', 'fossa_comum', 'ceu_aberto', 'nao_tem'),
-    coleta_lixo BOOLEAN,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    qtd_comodos INT DEFAULT 0,
+    qtd_dormitorios INT DEFAULT 0,
+    tipo_construcao ENUM('alvenaria', 'madeira', 'mista', 'taipa', 'outro') DEFAULT 'alvenaria',
+    area_conflito BOOLEAN DEFAULT FALSE,
+    condicao_domicilio ENUM('propria_quitada', 'propria_financiada', 'alugada', 'cedida', 'ocupada', 'situacao_rua') DEFAULT 'propria_quitada',
+    energia_eletrica ENUM('propria', 'compartilhada', 'sem_medidor', 'nao_tem') DEFAULT 'propria',
+    agua ENUM('propria', 'compartilhada', 'rede_publica', 'poco', 'carro pipa', 'sem_medidor', 'nao_tem') DEFAULT 'propria',
+    esgoto ENUM('rede', 'fossa_septica', 'fossa_comum', 'ceu_aberto', 'nao_tem') DEFAULT 'rede',
+    coleta_lixo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
        
     INDEX idx_habitacao_area_conflito (area_conflito)
 );
@@ -230,14 +209,12 @@ CREATE TABLE trabalho_renda (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL UNIQUE,
     quem_trabalha TEXT COMMENT 'Descrição detalhada de quem trabalha',
-    rendimento_total DECIMAL(10,2),
+    rendimento_total DECIMAL(10,2) DEFAULT 0.00,
     observacoes TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- Tabela para programas sociais recebidos
@@ -245,20 +222,16 @@ CREATE TABLE familia_programas_sociais (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL,
     programa_id INT NOT NULL,
-    valor DECIMAL(10,2),
+    valor DECIMAL(10,2) DEFAULT 0.00,
     data_inicio DATE,
     data_fim DATE,
-    ativo BOOLEAN,
+    ativo BOOLEAN DEFAULT TRUE,
     observacoes TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    FOREIGN KEY (programa_id) REFERENCES programas_sociais_disponiveis(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (programa_id) REFERENCES programas_sociais_disponiveis(id) ON DELETE RESTRICT ON UPDATE CASCADE,
        
     UNIQUE KEY unique_familia_programa (familia_id, programa_id),
     INDEX idx_familia_programas_ativo (ativo),
@@ -270,17 +243,13 @@ CREATE TABLE familia_despesas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL,
     tipo_despesa_id INT NOT NULL,
-    valor DECIMAL(10,2) NOT NULL,
+    valor DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     observacoes VARCHAR(255),
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    FOREIGN KEY (tipo_despesa_id) REFERENCES tipos_despesas(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (tipo_despesa_id) REFERENCES tipos_despesas(id) ON DELETE RESTRICT ON UPDATE CASCADE,
        
     UNIQUE KEY unique_familia_despesa (familia_id, tipo_despesa_id),
     INDEX idx_familia_despesas_valor (valor)
@@ -290,17 +259,15 @@ CREATE TABLE familia_despesas (
 CREATE TABLE situacao_social (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL UNIQUE,
-    participa_religiao BOOLEAN,
+    participa_religiao BOOLEAN DEFAULT FALSE,
     religiao_qual VARCHAR(255),
-    participa_acao_social BOOLEAN,
+    participa_acao_social BOOLEAN DEFAULT FALSE,
     acao_social_qual VARCHAR(255),
     observacoes TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- Tabela para serviços públicos acessados
@@ -309,33 +276,27 @@ CREATE TABLE familia_servicos_publicos (
     familia_id INT NOT NULL,
     tipo ENUM('CRAS', 'CREAS', 'saude', 'educacao', 'esporte', 'habitacao', 'assistencia social'),
     observacoes TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
     UNIQUE KEY unique_familia_servico (familia_id, tipo),
     INDEX idx_familia_servicos_tipo (tipo)
 );
 
 -- Tabela para evolução do prontuário
-CREATE TABLE evolucoes (
+CREATE TABLE IF NOT EXISTS evolucoes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL,
     usuario_id INT NOT NULL,
     data_evolucao DATE NOT NULL,
     hora_evolucao TIME NOT NULL,
     descricao TEXT NOT NULL,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- Tabela de autorizações de benefícios
@@ -343,32 +304,26 @@ CREATE TABLE IF NOT EXISTS autorizacoes_beneficios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL,
     tipo_beneficio ENUM('cesta_basica', 'auxilio_funeral', 'auxilio_natalidade', 'passagem', 'outro') NOT NULL,
-    quantidade INT NOT NULL COMMENT 'Quantidade de vezes que pode ser utilizado',
-    quantidade_utilizada INT NOT NULL COMMENT 'Quantidade já utilizada',
-    validade_meses INT NOT NULL COMMENT 'Validade em meses',
+    quantidade INT NOT NULL DEFAULT 1,
+    quantidade_utilizada INT NOT NULL DEFAULT 0,
+    validade_meses INT NOT NULL,
     data_autorizacao DATE NOT NULL,
-    data_validade DATE NOT NULL COMMENT 'Data calculada automaticamente',
-    autorizador_id INT NOT NULL COMMENT 'ID do técnico ou coordenador que autorizou',
-    evolucao_id INT NULL COMMENT 'ID da evolução relacionada (opcional)',
+    data_validade DATE NOT NULL,
+    autorizador_id INT NOT NULL,
+    evolucao_id INT NULL,
     justificativa TEXT NOT NULL,
     observacoes TEXT,
-    status ENUM('ativa', 'utilizada', 'expirada', 'cancelada') NOT NULL,
-    motivo_cancelamento TEXT NULL COMMENT 'Motivo do cancelamento do benefício',
-    observacoes_cancelamento TEXT NULL COMMENT 'Observações adicionais sobre o cancelamento',
-    cancelado_por INT NULL COMMENT 'ID do usuário que cancelou o benefício',
-    data_cancelamento DATETIME NULL COMMENT 'Data e hora do cancelamento',
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    status ENUM('ativa', 'utilizada', 'expirada', 'cancelada') NOT NULL DEFAULT 'ativa',
+    motivo_cancelamento TEXT NULL,
+    observacoes_cancelamento TEXT NULL,
+    cancelado_por INT NULL,
+    data_cancelamento DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    FOREIGN KEY (autorizador_id) REFERENCES usuarios(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
-    FOREIGN KEY (evolucao_id) REFERENCES evolucoes(id)
-        ON DELETE SET NULL
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (autorizador_id) REFERENCES usuarios(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (evolucao_id) REFERENCES evolucoes(id) ON DELETE SET NULL ON UPDATE CASCADE,
     FOREIGN KEY (cancelado_por) REFERENCES usuarios(id),
         
     INDEX idx_autorizacoes_familia (familia_id),
@@ -384,7 +339,7 @@ CREATE TABLE IF NOT EXISTS edicoes_beneficios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     autorizacao_id INT NOT NULL,
     familia_id INT NOT NULL,
-    editado_por INT NOT NULL COMMENT 'ID do usuário que fez a edição',
+    editado_por INT NOT NULL,
     
     tipo_beneficio_anterior ENUM('cesta_basica', 'auxilio_funeral', 'auxilio_natalidade', 'passagem', 'outro') NOT NULL,
     quantidade_anterior INT NOT NULL,
@@ -400,19 +355,13 @@ CREATE TABLE IF NOT EXISTS edicoes_beneficios (
     justificativa_nova TEXT NOT NULL,
     observacoes_nova TEXT,
     
-    motivo_edicao TEXT NOT NULL COMMENT 'Motivo da edição',
+    motivo_edicao TEXT NOT NULL,
     data_edicao DATETIME NOT NULL,
-    created_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    FOREIGN KEY (autorizacao_id) REFERENCES autorizacoes_beneficios(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    FOREIGN KEY (editado_por) REFERENCES usuarios(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
+    FOREIGN KEY (autorizacao_id) REFERENCES autorizacoes_beneficios(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (editado_por) REFERENCES usuarios(id) ON DELETE RESTRICT ON UPDATE CASCADE,
         
     INDEX idx_edicoes_autorizacao (autorizacao_id),
     INDEX idx_edicoes_familia (familia_id),
@@ -426,27 +375,21 @@ CREATE TABLE beneficios (
     familia_id INT NOT NULL,
     tipo_beneficio ENUM('cesta_basica', 'auxilio_funeral', 'auxilio_natalidade', 'passagem', 'outro'),
     descricao_beneficio VARCHAR(255),
-    valor DECIMAL(10,2),
+    valor DECIMAL(10,2) DEFAULT 0.00,
     justificativa TEXT,
     responsavel_id INT NOT NULL,
     autorizacao_id INT NULL,
-    status ENUM('entregue', 'cancelado'),
+    status ENUM('entregue', 'cancelado') DEFAULT 'entregue',
     data_entrega DATE NULL,
     observacoes TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    FOREIGN KEY (responsavel_id) REFERENCES usuarios(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
-	FOREIGN KEY (autorizacao_id) REFERENCES autorizacoes_beneficios(id)
-		ON DELETE SET NULL
-		ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (responsavel_id) REFERENCES usuarios(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (autorizacao_id) REFERENCES autorizacoes_beneficios(id) ON DELETE SET NULL ON UPDATE CASCADE,
 
-	INDEX idx_beneficios_autorizacao (autorizacao_id),
+    INDEX idx_beneficios_autorizacao (autorizacao_id),
     INDEX idx_beneficios_status (status),
     INDEX idx_beneficios_tipo (tipo_beneficio)
 );
@@ -455,8 +398,8 @@ CREATE TABLE beneficios (
 CREATE TABLE local_encaminhamento (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR (255) NOT NULL,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Tabela para encaminhamentos
@@ -467,28 +410,20 @@ CREATE TABLE encaminhamentos (
     local_encaminhamento_id INT NOT NULL,
     data_encaminhamento DATE NOT NULL,
     responsavel_id INT NOT NULL,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    
-    FOREIGN KEY (familia_id) REFERENCES familias(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    FOREIGN KEY (evolucao_id) REFERENCES evolucoes(id)
-        ON DELETE SET NULL
-        ON UPDATE CASCADE,
-    FOREIGN KEY (responsavel_id) REFERENCES usuarios(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
-	FOREIGN KEY (local_encaminhamento_id) REFERENCES local_encaminhamento(id)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE,
+    FOREIGN KEY (familia_id) REFERENCES familias(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (evolucao_id) REFERENCES evolucoes(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (responsavel_id) REFERENCES usuarios(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (local_encaminhamento_id) REFERENCES local_encaminhamento(id) ON DELETE RESTRICT ON UPDATE CASCADE,
        
     INDEX idx_encaminhamentos_data (data_encaminhamento),
     INDEX idx_encaminhamentos_familia (familia_id)
 );
 
 -- ============================================
--- 2. VIEWS, TRIGGERS E ÍNDICES
+-- 2. VIEWS, TRIGGERS E ÍNDICES (sem alterações)
 -- ============================================
 
 -- View para busca de famílias com informações básicas
@@ -498,7 +433,6 @@ SELECT
     f.prontuario,
     f.data_cadastro,
     f.data_atendimento,
-    f.situacao,
     e.nome as equipamento_nome,
     e.regiao,
     u.nome as profissional_nome,
@@ -522,7 +456,6 @@ SELECT
     DATE_FORMAT(f.data_cadastro, '%Y-%m') as mes_ano,
     e.nome as equipamento,
     COUNT(*) as total_atendimentos,
-    COUNT(CASE WHEN f.situacao = 'ativo' THEN 1 END) as ativos,
     AVG(tr.rendimento_total) as renda_media
 FROM familias f
 INNER JOIN equipamento e ON f.equipamento_id = e.id
@@ -651,7 +584,6 @@ DELIMITER ;
 -- --------------------------------------------
 
 CREATE INDEX idx_familias_equipamento_data ON familias(equipamento_id, data_cadastro);
-CREATE INDEX idx_familias_profissional_situacao ON familias(profissional_id, situacao);
 CREATE INDEX idx_pessoas_familia_tipo ON pessoas(familia_id, tipo_membro);
 CREATE INDEX idx_evolucoes_familia_data ON evolucoes(familia_id, data_evolucao);
 
@@ -710,8 +642,8 @@ INSERT INTO usuarios (nome,cpf,senha_hash,cargo_id,equipamento_id, ativo) VALUES
 
 -- Inserir dados de famílias e pessoas
 -- FAMÍLIA 1
-INSERT INTO familias (equipamento_id, data_cadastro, data_atendimento, profissional_id, situacao)
-VALUES (4, '2025-07-01', '2025-07-04', 1, 'ativo');
+INSERT INTO familias (equipamento_id, data_cadastro, data_atendimento, profissional_id)
+VALUES (4, '2025-07-01', '2025-07-04', 1);
 SET @last_familia_id = LAST_INSERT_ID();
 INSERT INTO pessoas (familia_id, nome_completo, data_nascimento, sexo, cpf, telefone, estado_civil, escolaridade, tipo_membro, ocupacao, renda_mensal, ativo)
 VALUES (@last_familia_id, 'Responsável 1 da Silva', '2012-05-29', 'feminino', '000.000.001-00', '(17) 99123-4510', 'solteiro', 'medio_completo', 'responsavel', 'Autônomo', 1485.10, TRUE);
@@ -723,8 +655,8 @@ INSERT INTO trabalho_renda (familia_id, quem_trabalha, rendimento_total)
 VALUES (@last_familia_id, 'Responsável', 1883.90);
 
 -- FAMÍLIA 2
-INSERT INTO familias (equipamento_id, data_cadastro, data_atendimento, profissional_id, situacao)
-VALUES (4, '2025-06-19', '2025-06-23', 1, 'ativo');
+INSERT INTO familias (equipamento_id, data_cadastro, data_atendimento, profissional_id)
+VALUES (4, '2025-06-19', '2025-06-23', 1);
 SET @last_familia_id = LAST_INSERT_ID();
 INSERT INTO pessoas (familia_id, nome_completo, data_nascimento, sexo, cpf, telefone, estado_civil, escolaridade, tipo_membro, ocupacao, renda_mensal, ativo)
 VALUES (@last_familia_id, 'Responsável 2 da Silva', '2006-04-09', 'masculino', '000.000.002-00', '(17) 99123-4511', 'solteiro', 'medio_completo', 'responsavel', 'Autônomo', 1191.35, TRUE);
@@ -736,8 +668,8 @@ INSERT INTO trabalho_renda (familia_id, quem_trabalha, rendimento_total)
 VALUES (@last_familia_id, 'Responsável', 1248.86);
 
 -- FAMÍLIA 3
-INSERT INTO familias (equipamento_id, data_cadastro, data_atendimento, profissional_id, situacao)
-VALUES (1, '2025-06-16', '2025-06-18', 1, 'ativo');
+INSERT INTO familias (equipamento_id, data_cadastro, data_atendimento, profissional_id)
+VALUES (1, '2025-06-16', '2025-06-18', 1);
 SET @last_familia_id = LAST_INSERT_ID();
 INSERT INTO pessoas (familia_id, nome_completo, data_nascimento, sexo, cpf, telefone, estado_civil, escolaridade, tipo_membro, ocupacao, renda_mensal, ativo)
 VALUES (@last_familia_id, 'Responsável 3 da Silva', '2016-11-27', 'feminino', '000.000.003-00', '(17) 99123-4512', 'solteiro', 'medio_completo', 'responsavel', 'Autônomo', 971.48, TRUE);
@@ -749,8 +681,8 @@ INSERT INTO trabalho_renda (familia_id, quem_trabalha, rendimento_total)
 VALUES (@last_familia_id, 'Responsável', 1346.36);
 
 -- FAMÍLIA 4
-INSERT INTO familias (equipamento_id, data_cadastro, data_atendimento, profissional_id, situacao)
-VALUES (2, '2025-07-07', '2025-07-07', 1, 'ativo');
+INSERT INTO familias (equipamento_id, data_cadastro, data_atendimento, profissional_id)
+VALUES (2, '2025-07-07', '2025-07-07', 1);
 SET @last_familia_id = LAST_INSERT_ID();
 INSERT INTO pessoas (familia_id, nome_completo, data_nascimento, sexo, cpf, telefone, estado_civil, escolaridade, tipo_membro, ocupacao, renda_mensal, ativo)
 VALUES (@last_familia_id, 'Responsável 4 da Silva', '2019-01-26', 'masculino', '000.000.004-00', '(17) 99123-4513', 'solteiro', 'medio_completo', 'responsavel', 'Autônomo', 1008.94, TRUE);
