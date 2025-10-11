@@ -52,7 +52,17 @@ const Familias: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
-  const [filtroSituacao, setFiltroSituacao] = useState("todos")
+  const [filtroRegiao, setFiltroRegiao] = useState("todas")
+
+  const regioes = [
+    "CRAS Oeste",
+    "CRAS Leste",
+    "CRAS Norte",
+    "CRAS Sul",
+    "CREAS Central",
+    "Centro POP",
+    "Secretaria de Assistência Social",
+  ]
 
   useEffect(() => {
     carregarFamilias()
@@ -60,7 +70,7 @@ const Familias: React.FC = () => {
 
   useEffect(() => {
     filtrarFamilias()
-  }, [searchTerm, filtroSituacao, familias])
+  }, [searchTerm, filtroRegiao, familias])
 
   const carregarFamilias = async () => {
     try {
@@ -73,7 +83,7 @@ const Familias: React.FC = () => {
       console.log("Resposta:", response.data)
       setFamilias(response.data)
       setFamiliasFiltradas(response.data)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("Erro ao carregar famílias:", err)
       setError("Não foi possível carregar as famílias. Verifique se o servidor está rodando.")
@@ -82,12 +92,30 @@ const Familias: React.FC = () => {
     }
   }
 
+  const normalizarRegiao = (regiao: string): string => {
+    const regiaoTrim = regiao.trim()
+    // Se começa com CRAS ou CREAS, pega apenas a última palavra
+    if (regiaoTrim.startsWith("CRAS ")) {
+      return regiaoTrim.replace("CRAS ", "")
+    }
+    if (regiaoTrim.startsWith("CREAS ")) {
+      return regiaoTrim.replace("CREAS ", "")
+    }
+    // Para outras regiões, retorna como está
+    return regiaoTrim
+  }
+
   const filtrarFamilias = () => {
     let filtradas = familias
 
-    // Filtro por situação
-    if (filtroSituacao !== "todos") {
-      filtradas = filtradas.filter((familia) => familia.situacao === filtroSituacao)
+    // Filtro por região
+    if (filtroRegiao !== "todas") {
+      const regiaoFiltroNormalizada = normalizarRegiao(filtroRegiao)
+      filtradas = filtradas.filter((familia) => {
+        const regiaoFamilia = familia.equipamento_regiao?.trim()
+        const regiaoFamiliaNormalizada = normalizarRegiao(regiaoFamilia)
+        return regiaoFamiliaNormalizada === regiaoFiltroNormalizada
+      })
     }
 
     // Filtro por termo de busca
@@ -142,7 +170,6 @@ const Familias: React.FC = () => {
     return new Date(data).toLocaleDateString("pt-BR")
   }
 
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -175,7 +202,7 @@ const Familias: React.FC = () => {
     )
   }
 
-  return (                                                                                                                                                                                                                                                                                                            
+  return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <Header />
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -213,13 +240,16 @@ const Familias: React.FC = () => {
               <div className="relative">
                 <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <select
-                  value={filtroSituacao}
-                  onChange={(e) => setFiltroSituacao(e.target.value)}
+                  value={filtroRegiao}
+                  onChange={(e) => setFiltroRegiao(e.target.value)}
                   className="pl-10 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:bg-white transition-all duration-200 appearance-none cursor-pointer"
                 >
-                  <option value="todos">Todas</option>
-                  <option value="ativo">Ativas</option>
-                  <option value="inativo">Inativas</option>
+                  <option value="todas">Todas as Regiões</option>
+                  {regioes.map((regiao) => (
+                    <option key={regiao} value={regiao}>
+                      {regiao}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -233,14 +263,14 @@ const Familias: React.FC = () => {
               <Users className="w-12 h-12 text-gray-400" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              {searchTerm || filtroSituacao !== "todos" ? "Nenhuma família encontrada" : "Nenhuma família cadastrada"}
+              {searchTerm || filtroRegiao !== "todas" ? "Nenhuma família encontrada" : "Nenhuma família cadastrada"}
             </h2>
             <p className="text-gray-600 mb-6">
-              {searchTerm || filtroSituacao !== "todos"
+              {searchTerm || filtroRegiao !== "todas"
                 ? "Tente ajustar os filtros de busca"
                 : "Comece cadastrando uma nova família"}
             </p>
-            {!searchTerm && filtroSituacao === "todos" && (
+            {!searchTerm && filtroRegiao === "todas" && (
               <button
                 onClick={() => navigate("/familias/novo")}
                 className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors font-medium"
