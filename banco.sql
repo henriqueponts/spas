@@ -1,7 +1,3 @@
--- ============================================
--- SISTEMA SPAS - BANCO DE DADOS CORRIGIDO COM DEFAULTS
--- ============================================
-
 CREATE DATABASE IF NOT EXISTS spas_db;
 USE spas_db;
 

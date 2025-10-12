@@ -32,7 +32,7 @@ router.post("/registro", async (req, res) => {
         const token = authHeader.split(" ")[1]
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
-        // Verificar se é DIRETOR
+        // Verificar se é DIRETOR ou COORDENADOR
         const [userResult] = await db.query(
           `
                     SELECT c.nome as cargo_nome
@@ -43,8 +43,9 @@ router.post("/registro", async (req, res) => {
           [decoded.id],
         )
 
-        if (userResult.length === 0 || userResult[0].cargo_nome !== "DIRETOR") {
-          return res.status(403).json({ message: "Apenas diretores podem criar usuários" })
+        const cargosPermitidos = ["DIRETOR", "COORDENADOR"]
+        if (userResult.length === 0 || !cargosPermitidos.includes(userResult[0].cargo_nome)) {
+          return res.status(403).json({ message: "Apenas diretores e coordenadores podem criar usuários" })
         }
       } catch (tokenError) {
         return res.status(401).json({ message: "Token inválido" })
@@ -1542,8 +1543,9 @@ router.get("/usuarios", verifyToken, async (req, res) => {
       [req.userId],
     )
 
-    if (userResult.length === 0 || userResult[0].cargo_nome !== "DIRETOR") {
-      return res.status(403).json({ message: "Acesso negado. Permissão de Diretor necessária." })
+    const cargosPermitidos = ["DIRETOR", "COORDENADOR"]
+    if (userResult.length === 0 || !cargosPermitidos.includes(userResult[0].cargo_nome)) {
+      return res.status(403).json({ message: "Acesso negado. Permissão de Diretor ou Coordenador necessária." })
     }
 
     const [usuarios] = await db.query(`
@@ -1591,7 +1593,8 @@ router.put("/usuarios/:id/status", verifyToken, async (req, res) => {
       [req.userId],
     )
 
-    if (userResult.length === 0 || userResult[0].cargo_nome !== "DIRETOR") {
+    const cargosPermitidos = ["DIRETOR", "COORDENADOR"]
+    if (userResult.length === 0 || !cargosPermitidos.includes(userResult[0].cargo_nome)) {
       return res.status(403).json({ message: "Acesso negado" })
     }
 
@@ -1643,8 +1646,9 @@ router.put("/usuarios/:id/senha", verifyToken, async (req, res) => {
       [req.userId],
     )
 
-    if (userResult.length === 0 || userResult[0].cargo_nome !== "DIRETOR") {
-      return res.status(403).json({ message: "Acesso negado. Apenas diretores podem alterar senhas." })
+    const cargosPermitidos = ["DIRETOR", "COORDENADOR"]
+    if (userResult.length === 0 || !cargosPermitidos.includes(userResult[0].cargo_nome)) {
+      return res.status(403).json({ message: "Acesso negado. Apenas diretores ou coordenadores podem alterar senhas." })
     }
 
     const [usuarioExiste] = await db.query("SELECT id, nome FROM usuarios WHERE id = ?", [usuario_id])

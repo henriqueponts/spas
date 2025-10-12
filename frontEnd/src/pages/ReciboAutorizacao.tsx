@@ -232,16 +232,15 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
             <span class="info-label">Justificativa:</span>
             <span class="info-value">${dados.autorizacao.justificativa}</span>
           </div>
-          ${
-            dados.autorizacao.observacoes
-              ? `
+          ${dados.autorizacao.observacoes
+      ? `
           <div class="info-row">
             <span class="info-label">Observações:</span>
             <span class="info-value">${dados.autorizacao.observacoes}</span>
           </div>
           `
-              : ""
-          }
+      : ""
+    }
         </div>
         
         <div class="section">

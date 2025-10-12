@@ -454,6 +454,29 @@ const AlterarFamilia: React.FC = () => {
           newErrors.responsavel = { ...newErrors.responsavel, nome_completo: "Por favor, insira um nome e sobrenome válidos." }
         }
         if (!responsavel.data_nascimento) {
+          if (!newErrors.responsavel) newErrors.responsavel = {};
+          newErrors.responsavel.data_nascimento = "Data de nascimento é obrigatória."
+        } else if (!isDateInPast(responsavel.data_nascimento)) {
+          if (!newErrors.responsavel) newErrors.responsavel = {};
+          newErrors.responsavel.data_nascimento = "Data de nascimento não pode ser no futuro."
+        } else {
+          // Adiciona a verificação de idade
+          const hoje = new Date();
+          // Adiciona 1 hora para evitar problemas com fuso horário que podem "voltar" o dia
+          const dataNascimento = new Date(responsavel.data_nascimento);
+          dataNascimento.setHours(dataNascimento.getHours() + 1);
+          
+          let idade = hoje.getFullYear() - dataNascimento.getFullYear();
+          const m = hoje.getMonth() - dataNascimento.getMonth();
+          if (m < 0 || (m === 0 && hoje.getDate() < dataNascimento.getDate())) {
+            idade--;
+          }
+          if (idade < 18) {
+            if (!newErrors.responsavel) newErrors.responsavel = {};
+            newErrors.responsavel.data_nascimento = "O responsável deve ter pelo menos 18 anos.";
+          }
+        }
+        if (!responsavel.data_nascimento) {
           newErrors.responsavel = { ...newErrors.responsavel, data_nascimento: "Data de nascimento é obrigatória." }
         } else if (!isDateInPast(responsavel.data_nascimento)) {
           newErrors.responsavel = { ...newErrors.responsavel, data_nascimento: "Data de nascimento não pode ser no futuro." }
@@ -1580,13 +1603,18 @@ const validarFormularioCompleto = (): boolean => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de cômodos</label>
-                  <input
+                    <input
                     type="number"
+                    min="0" // ADICIONADO: Impede números negativos pela UI
                     value={dadosFamilia.habitacao.qtd_comodos}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
                         ...prev,
-                        habitacao: { ...prev.habitacao, qtd_comodos: Number.parseInt(e.target.value) || 0 },
+                        habitacao: { 
+                          ...prev.habitacao, 
+                          // MODIFICADO: Garante que o valor nunca seja negativo
+                          qtd_comodos: Math.max(0, Number.parseInt(e.target.value) || 0) 
+                        },
                       }))
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1596,11 +1624,16 @@ const validarFormularioCompleto = (): boolean => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de dormitórios</label>
                   <input
                     type="number"
+                    min="0" // ADICIONADO: Impede números negativos pela UI
                     value={dadosFamilia.habitacao.qtd_dormitorios}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
                         ...prev,
-                        habitacao: { ...prev.habitacao, qtd_dormitorios: Number.parseInt(e.target.value) || 0 },
+                        habitacao: { 
+                          ...prev.habitacao, 
+                          // MODIFICADO: Garante que o valor nunca seja negativo
+                          qtd_dormitorios: Math.max(0, Number.parseInt(e.target.value) || 0) 
+                        },
                       }))
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"

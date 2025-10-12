@@ -123,21 +123,21 @@ const AppContent: React.FC = () => {
       <Route path="/acesso-negado" element={<AcessoNegado />} />
 
       {/* --- ROTAS PROTEGIDAS (AGORA USANDO IDs) --- */}
-      {/* Registro - apenas Diretores (ID 1) */}
+      {/* Registro - apenas Diretores (ID 1) e Coordenadores (ID 2) */}
       <Route
         path="/registro"
         element={
-          <ProtectedRoute allowedRoles={[Cargo.DIRETOR]}>
+          <ProtectedRoute allowedRoles={[Cargo.DIRETOR, Cargo.COORDENADOR]}>
             <Registro />
           </ProtectedRoute>
         }
       />
 
-      {/* Usuários - apenas Diretores (ID 1) */}
+      {/* Usuários - apenas Diretores (ID 1) e Coordenadores (ID 2) */}
       <Route
         path="/usuarios"
         element={
-          <ProtectedRoute allowedRoles={[Cargo.DIRETOR]}>
+          <ProtectedRoute allowedRoles={[Cargo.DIRETOR, Cargo.COORDENADOR]}>
             <Usuarios />
           </ProtectedRoute>
         }

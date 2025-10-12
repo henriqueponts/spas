@@ -47,11 +47,11 @@ const QuickActions: React.FC = () => {
     {
       id: "user-management",
       title: "Gestão de Usuários",
-      description: "Criar/Inativar usuários do sistema",
+      description: "Criar/Inativar/Alterar Senha de usuários do sistema",
       icon: <UserCog size={24} />,
       color: "orange",
       onClick: () => navigate("/usuarios"), // <-- Correto
-      allowedRoles: ["DIRETOR"],
+      allowedRoles: ["DIRETOR", "COORDENADOR"],
     },
   ]
 

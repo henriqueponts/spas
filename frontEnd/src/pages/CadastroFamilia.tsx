@@ -337,6 +337,29 @@ const CadastroFamilia: React.FC = () => {
         } else if (!isDateInPast(responsavel.data_nascimento)) {
           if (!newErrors.responsavel) newErrors.responsavel = {}
           newErrors.responsavel.data_nascimento = "Data de nascimento não pode ser no futuro."
+        } else {
+          // Adiciona a verificação de idade
+          const hoje = new Date()
+          // Adiciona 1 hora para evitar problemas com fuso horário que podem "voltar" o dia
+          const dataNascimento = new Date(responsavel.data_nascimento)
+          dataNascimento.setHours(dataNascimento.getHours() + 1)
+
+          let idade = hoje.getFullYear() - dataNascimento.getFullYear()
+          const m = hoje.getMonth() - dataNascimento.getMonth()
+          if (m < 0 || (m === 0 && hoje.getDate() < dataNascimento.getDate())) {
+            idade--
+          }
+          if (idade < 18) {
+            if (!newErrors.responsavel) newErrors.responsavel = {}
+            newErrors.responsavel.data_nascimento = "O responsável deve ter pelo menos 18 anos."
+          }
+        }
+        if (!responsavel.data_nascimento) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.data_nascimento = "Data de nascimento é obrigatória."
+        } else if (!isDateInPast(responsavel.data_nascimento)) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.data_nascimento = "Data de nascimento não pode ser no futuro."
         }
         if (!responsavel.cpf) {
           if (!newErrors.responsavel) newErrors.responsavel = {}
@@ -421,14 +444,6 @@ const CadastroFamilia: React.FC = () => {
         }
         break
 
-      case 3: // Habitação
-        if (habitacao.qtd_comodos < 0) {
-          newErrors.habitacao = { ...newErrors.habitacao, qtd_comodos: "Valor não pode ser negativo." }
-        }
-        if (habitacao.qtd_dormitorios < 0) {
-          newErrors.habitacao = { ...newErrors.habitacao, qtd_dormitorios: "Valor não pode ser negativo." }
-        }
-        break
 
       case 4: // Trabalho e Renda
         if (trabalho_renda.rendimento_total !== undefined && trabalho_renda.rendimento_total !== null) {
@@ -607,23 +622,21 @@ const CadastroFamilia: React.FC = () => {
           return (
             <div key={etapa.id} className="flex items-center">
               <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
-                  isCompleta
+                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${isCompleta
                     ? "bg-green-500 border-green-500 text-white"
                     : isAtual
                       ? "bg-blue-500 border-blue-500 text-white"
                       : isAcessivel
                         ? "border-gray-300 text-gray-500"
                         : "border-gray-200 text-gray-300"
-                }`}
+                  }`}
               >
                 {isCompleta ? <Check className="w-5 h-5" /> : <Icone className="w-5 h-5" />}
               </div>
               <div className="ml-3 hidden sm:block">
                 <p
-                  className={`text-sm font-medium ${
-                    isAtual ? "text-blue-600" : isCompleta ? "text-green-600" : "text-gray-500"
-                  }`}
+                  className={`text-sm font-medium ${isAtual ? "text-blue-600" : isCompleta ? "text-green-600" : "text-gray-500"
+                    }`}
                 >
                   {etapa.nome}
                 </p>
@@ -651,8 +664,7 @@ const CadastroFamilia: React.FC = () => {
 
   const renderizarEtapa = () => {
     const getInputClass = (fieldError: string | undefined) =>
-      `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-        fieldError ? "border-red-500" : "border-gray-300"
+      `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldError ? "border-red-500" : "border-gray-300"
       }`
 
     const renderError = (fieldError: string | undefined) =>
@@ -709,9 +721,8 @@ const CadastroFamilia: React.FC = () => {
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({ ...prev, equipamento_id: Number.parseInt(e.target.value) }))
                     }
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.equipamento_id ? "border-red-500" : "border-gray-300"
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.equipamento_id ? "border-red-500" : "border-gray-300"
+                      }`}
                   >
                     <option value={0}>Selecione o equipamento</option>
                     {equipamentos.map((equipamento) => (
@@ -1653,12 +1664,16 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de Cômodos</label>
                   <input
                     type="number"
+                    min="0" 
                     placeholder="Ex: 4"
                     value={dadosFamilia.habitacao.qtd_comodos}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
                         ...prev,
-                        habitacao: { ...prev.habitacao, qtd_comodos: Number.parseInt(e.target.value) || 0 },
+                        habitacao: {
+                          ...prev.habitacao,
+                          qtd_comodos: Math.max(0, Number.parseInt(e.target.value) || 0)
+                        },
                       }))
                     }
                     className={getInputClass(errors.habitacao?.qtd_comodos)}
@@ -1669,12 +1684,16 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de Dormitórios</label>
                   <input
                     type="number"
+                    min="0"
                     placeholder="Ex: 2"
                     value={dadosFamilia.habitacao.qtd_dormitorios}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
                         ...prev,
-                        habitacao: { ...prev.habitacao, qtd_dormitorios: Number.parseInt(e.target.value) || 0 },
+                        habitacao: {
+                          ...prev.habitacao,
+                          qtd_dormitorios: Math.max(0, Number.parseInt(e.target.value) || 0)
+                        },
                       }))
                     }
                     className={getInputClass(errors.habitacao?.qtd_dormitorios)}
@@ -1886,7 +1905,7 @@ const CadastroFamilia: React.FC = () => {
           </Card>
         )
 
-case 4: // Renda
+      case 4: // Renda
         return (
           <Card>
             <CardHeader>
@@ -1931,10 +1950,10 @@ case 4: // Renda
                   onChange={(e) =>
                     setDadosFamilia((prev) => ({
                       ...prev,
-                      trabalho_renda: { 
+                      trabalho_renda: {
                         ...prev.trabalho_renda,
                         // CORREÇÃO: Garante que o valor não seja negativo
-                        rendimento_total: Math.max(0, Number(e.target.value)) 
+                        rendimento_total: Math.max(0, Number(e.target.value))
                       },
                     }))
                   }

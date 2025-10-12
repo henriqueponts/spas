@@ -51,7 +51,10 @@ const Usuarios: React.FC = () => {
   const [erroSenha, setErroSenha] = useState<string>("")
 
   // Lógica de permissão mais robusta com useMemo
-  const hasPermission = useMemo(() => user?.cargo_nome === "DIRETOR", [user])
+  const hasPermission = useMemo(() =>
+    user?.cargo_nome === "DIRETOR" || user?.cargo_nome === "COORDENADOR",
+    [user]
+  );
 
   const validarSenha = (senha: string): string => {
     if (senha.length < 6) return "A senha deve ter no mínimo 6 caracteres"
@@ -354,13 +357,12 @@ const Usuarios: React.FC = () => {
                     <button
                       onClick={() => alternarStatusUsuario(usuario.id)}
                       disabled={String(user?.id) === usuario.id && usuario.ativo}
-                      className={`flex items-center space-x-1 px-3 py-2 text-sm rounded-lg transition-colors border ${
-                        String(user?.id) === String(usuario.id) && usuario.ativo
+                      className={`flex items-center space-x-1 px-3 py-2 text-sm rounded-lg transition-colors border ${String(user?.id) === String(usuario.id) && usuario.ativo
                           ? "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed"
                           : usuario.ativo
                             ? "bg-red-50 text-red-700 hover:bg-red-100 border-red-200 hover:border-red-300"
                             : "bg-green-50 text-green-700 hover:bg-green-100 border-green-200 hover:border-green-300"
-                      }`}
+                        }`}
                     >
                       {usuario.ativo ? <UserX size={16} /> : <UserCheck size={16} />}
                       <span>{usuario.ativo ? "Inativar" : "Ativar"}</span>

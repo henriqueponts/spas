@@ -225,26 +225,24 @@ export const gerarReciboEntrega = (dados: DadosReciboEntrega) => {
             <span class="info-label">Data de Entrega:</span>
             <span class="info-value">${formatarData(dados.beneficio.data_entrega)}</span>
           </div>
-          ${
-            dados.beneficio.descricao
-              ? `
+          ${dados.beneficio.descricao
+      ? `
           <div class="info-row">
             <span class="info-label">Descrição:</span>
             <span class="info-value">${dados.beneficio.descricao}</span>
           </div>
           `
-              : ""
-          }
-          ${
-            dados.beneficio.observacoes
-              ? `
+      : ""
+    }
+          ${dados.beneficio.observacoes
+      ? `
           <div class="info-row">
             <span class="info-label">Observações:</span>
             <span class="info-value">${dados.beneficio.observacoes}</span>
           </div>
           `
-              : ""
-          }
+      : ""
+    }
         </div>
         
         <div class="section">

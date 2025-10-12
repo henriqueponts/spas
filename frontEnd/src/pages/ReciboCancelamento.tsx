@@ -256,9 +256,8 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
           </div>
         </div>
 
-        ${
-          dados.beneficiosConcedidos && dados.beneficiosConcedidos.length > 0
-            ? `
+        ${dados.beneficiosConcedidos && dados.beneficiosConcedidos.length > 0
+      ? `
         <div class="section">
           <div class="section-title">Benefícios Concedidos (Já Entregues)</div>
           <table class="beneficios-table">
@@ -272,8 +271,8 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
             </thead>
             <tbody>
               ${dados.beneficiosConcedidos
-                .map(
-                  (beneficio) => `
+        .map(
+          (beneficio) => `
                 <tr>
                   <td>${formatarTipoBeneficio(beneficio.tipo_beneficio)}</td>
                   <td>${formatarValor(beneficio.valor)}</td>
@@ -281,14 +280,14 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
                   <td>${beneficio.responsavel_entrega}</td>
                 </tr>
               `,
-                )
-                .join("")}
+        )
+        .join("")}
             </tbody>
           </table>
         </div>
         `
-            : ""
-        }
+      : ""
+    }
         
         <div class="section">
           <div class="section-title">Dados do Cancelamento</div>
@@ -308,16 +307,15 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
             <span class="info-label">Motivo:</span>
             <span class="info-value">${dados.cancelamento.motivo}</span>
           </div>
-          ${
-            dados.cancelamento.observacoes
-              ? `
+          ${dados.cancelamento.observacoes
+      ? `
           <div class="info-row">
             <span class="info-label">Observações:</span>
             <span class="info-value">${dados.cancelamento.observacoes}</span>
           </div>
           `
-              : ""
-          }
+      : ""
+    }
         </div>
         
         <div class="signature-section">

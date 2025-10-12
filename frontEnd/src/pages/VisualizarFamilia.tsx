@@ -1115,6 +1115,8 @@ const VisualizarFamilia: React.FC = () => {
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                         <div>
                           <h3 className="font-medium text-gray-900">{integrante.nome_completo}</h3>
+                          {/* LINHA ADICIONADA ABAIXO */}
+                          <p className="text-sm text-gray-600">CPF: {integrante.cpf || "Não informado"}</p>
                           <p className="text-sm text-gray-600">
                             {calcularIdade(integrante.data_nascimento)} anos - Renda:{" "}
                             {formatarMoeda(integrante.renda_mensal)}
@@ -1170,7 +1172,7 @@ const VisualizarFamilia: React.FC = () => {
                       <span>
                         {formatarMoeda(
                           garantirNumero(familia.trabalho_renda.rendimento_total) +
-                            familia.programas_sociais.reduce((t, p) => t + garantirNumero(p.valor), 0),
+                          familia.programas_sociais.reduce((t, p) => t + garantirNumero(p.valor), 0),
                         )}
                       </span>
                     </div>
