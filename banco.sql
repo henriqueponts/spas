@@ -692,3 +692,108 @@ VALUES (@last_familia_id, 'Responsável', 2361.28);
 -- LOCAL ENCAMINHAMENTO
 INSERT INTO local_encaminhamento (nome)
 VALUES ("CAPS"), ("Hospital");
+
+-- Tabela principal de logs do sistema
+CREATE TABLE IF NOT EXISTS logs_sistema (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tipo_log ENUM(
+        'login', 
+        'logout', 
+        'criacao', 
+        'atualizacao', 
+        'entrega', 
+        'cancelamento',
+        'inativacao',
+        'ativacao'
+    ) NOT NULL,
+    entidade ENUM(
+        'usuario',
+        'familia',
+        'pessoa',
+        'beneficio',
+        'autorizacao_beneficio',
+        'evolucao',
+        'encaminhamento',
+        'endereco',
+        'saude',
+        'habitacao',
+        'trabalho_renda',
+        'programa_social',
+        'despesa',
+        'situacao_social',
+        'servico_publico'
+    ) NOT NULL,
+    entidade_id INT NULL COMMENT 'ID do registro afetado',
+    usuario_id INT NOT NULL COMMENT 'Usuário que realizou a ação',
+    descricao TEXT NOT NULL COMMENT 'Descrição da ação realizada',
+    ip_address VARCHAR(45) NULL COMMENT 'Endereço IP do usuário',
+    user_agent TEXT NULL COMMENT 'Navegador/dispositivo utilizado',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    
+    INDEX idx_logs_tipo (tipo_log),
+    INDEX idx_logs_entidade (entidade),
+    INDEX idx_logs_usuario (usuario_id),
+    INDEX idx_logs_data (created_at),
+    INDEX idx_logs_entidade_id (entidade_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabela para armazenar detalhes de alterações (valores antigos vs novos)
+CREATE TABLE IF NOT EXISTS logs_alteracoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    log_id INT NOT NULL COMMENT 'Referência ao log principal',
+    campo VARCHAR(100) NOT NULL COMMENT 'Nome do campo alterado',
+    valor_antigo TEXT NULL COMMENT 'Valor antes da alteração',
+    valor_novo TEXT NULL COMMENT 'Valor após a alteração',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (log_id) REFERENCES logs_sistema(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    
+    INDEX idx_alteracoes_log (log_id),
+    INDEX idx_alteracoes_campo (campo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- View para facilitar consultas de logs com informações do usuário
+CREATE VIEW view_logs_completo AS
+SELECT 
+    ls.id,
+    ls.tipo_log,
+    ls.entidade,
+    ls.entidade_id,
+    ls.descricao,
+    ls.ip_address,
+    ls.created_at,
+    u.nome as usuario_nome,
+    u.cpf as usuario_cpf,
+    u.email as usuario_email,
+    c.nome as cargo_nome,
+    e.nome as equipamento_nome
+FROM logs_sistema ls
+INNER JOIN usuarios u ON ls.usuario_id = u.id
+INNER JOIN cargos c ON u.cargo_id = c.id
+INNER JOIN equipamento e ON u.equipamento_id = e.id
+ORDER BY ls.created_at DESC;
+
+-- View para logs de alterações com detalhes
+CREATE VIEW view_logs_alteracoes_completo AS
+SELECT 
+    la.id,
+    la.log_id,
+    la.campo,
+    la.valor_antigo,
+    la.valor_novo,
+    la.created_at,
+    ls.tipo_log,
+    ls.entidade,
+    ls.entidade_id,
+    ls.descricao,
+    u.nome as usuario_nome,
+    c.nome as cargo_nome
+FROM logs_alteracoes la
+INNER JOIN logs_sistema ls ON la.log_id = ls.id
+INNER JOIN usuarios u ON ls.usuario_id = u.id
+INNER JOIN cargos c ON u.cargo_id = c.id
+ORDER BY la.created_at DESC;
+
+ALTER TABLE logs_sistema MODIFY COLUMN entidade VARCHAR(50) NOT NULL;
