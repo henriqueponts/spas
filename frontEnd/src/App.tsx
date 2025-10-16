@@ -22,6 +22,7 @@ import VisualizarFamilia from "./pages/VisualizarFamilia"
 import Familias from "./pages/Familias"
 import AlterarFamilia from "./pages/AlterarFamilia"
 import Usuarios from "./pages/Usuarios"
+import Logs from "./pages/Logs"
 
 // Hook para proteger navegação baseado no cargo (MANTIDO)
 
@@ -37,15 +38,20 @@ const useCargoRedirect = () => {
 
     const allowedRoute = CargoRoutes[user.cargo_id as keyof typeof CargoRoutes]
 
-    console.log("[v0] useCargoRedirect - Cargo ID:", user.cargo_id)
-    console.log("[v0] useCargoRedirect - Rota permitida:", allowedRoute)
-    console.log("[v0] useCargoRedirect - Pathname atual:", location.pathname)
-
     // Lista de rotas que todos podem acessar
     const publicRoutes = ["/acesso-negado", "/login"]
 
     // Lista de rotas compartilhadas ou com permissão específica
-    const sharedRoutes = ["/", "/home", "/beneficios", "/familias", "/familias/cadastro", "/usuarios", "/registro"]
+    const sharedRoutes = [
+      "/",
+      "/home",
+      "/beneficios",
+      "/familias",
+      "/familias/cadastro",
+      "/usuarios",
+      "/registro",
+      "/logs",
+    ]
 
     // Verifica se está em uma rota de família específica (ex: /familia/123)
     const isFamiliaRoute = location.pathname.startsWith("/familia/")
@@ -54,17 +60,9 @@ const useCargoRedirect = () => {
     const isSharedRoute = sharedRoutes.includes(location.pathname)
     const isAllowedRoute = location.pathname === allowedRoute
 
-    console.log("[v0] É rota pública?", isPublicRoute)
-    console.log("[v0] É rota compartilhada?", isSharedRoute)
-    console.log("[v0] É rota de família?", isFamiliaRoute)
-    console.log("[v0] É a rota permitida?", isAllowedRoute)
-
     // Se não está em uma rota permitida...
     if (!isPublicRoute && !isSharedRoute && !isFamiliaRoute && !isAllowedRoute) {
-      console.log("[v0] ❌ Redirecionando para /acesso-negado")
       navigate("/acesso-negado", { replace: true })
-    } else {
-      console.log("[v0] ✅ Acesso permitido")
     }
   }, [user, location.pathname, navigate])
 }
@@ -139,6 +137,15 @@ const AppContent: React.FC = () => {
         element={
           <ProtectedRoute allowedRoles={[Cargo.DIRETOR, Cargo.COORDENADOR]}>
             <Usuarios />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/logs"
+        element={
+          <ProtectedRoute allowedRoles={[Cargo.DIRETOR, Cargo.COORDENADOR]}>
+            <Logs />
           </ProtectedRoute>
         }
       />

@@ -45,10 +45,7 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
     return new Date(data).toLocaleDateString("pt-BR", { timeZone: "UTC" })
   }
 
-  const formatarValor = (valor: number | null | undefined) => {
-    if (valor === null || valor === undefined) return "N/A"
-    return `R$ ${Number(valor).toFixed(2).replace(".", ",")}`
-  }
+
 
   const htmlRecibo = `
     <!DOCTYPE html>
@@ -256,38 +253,7 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
           </div>
         </div>
 
-        ${dados.beneficiosConcedidos && dados.beneficiosConcedidos.length > 0
-      ? `
-        <div class="section">
-          <div class="section-title">Benefícios Concedidos (Já Entregues)</div>
-          <table class="beneficios-table">
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Valor</th>
-                <th>Data de Entrega</th>
-                <th>Responsável pela Entrega</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${dados.beneficiosConcedidos
-        .map(
-          (beneficio) => `
-                <tr>
-                  <td>${formatarTipoBeneficio(beneficio.tipo_beneficio)}</td>
-                  <td>${formatarValor(beneficio.valor)}</td>
-                  <td>${formatarData(beneficio.data_entrega)}</td>
-                  <td>${beneficio.responsavel_entrega}</td>
-                </tr>
-              `,
-        )
-        .join("")}
-            </tbody>
-          </table>
-        </div>
-        `
-      : ""
-    }
+
         
         <div class="section">
           <div class="section-title">Dados do Cancelamento</div>

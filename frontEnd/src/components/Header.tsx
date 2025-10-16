@@ -84,12 +84,21 @@ const Header: React.FC = () => {
                 <span>Benefícios</span>
               </button>
 
-              {user.cargo_nome === "DIRETOR" && (
+              {(user.cargo_nome === "DIRETOR" || user.cargo_nome === "COORDENADOR") && (
                 <button onClick={() => navigate("/usuarios")} className={getNavItemClasses(["/usuarios", "/registro"])}>
                   <User size={16} />
                   <span>Usuários</span>
                 </button>
               )}
+              
+              {(user.cargo_nome === "DIRETOR" || user.cargo_nome === "COORDENADOR") && (
+                <button onClick={() => navigate("/logs")} className={getNavItemClasses("/logs")}>
+                  <FileText size={16} />
+                  <span>Logs</span>
+                </button>
+              )}
+              
+              
             </nav>
           </div>
 
