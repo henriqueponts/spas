@@ -631,6 +631,7 @@ router.post("/familias", verifyToken, async (req, res) => {
             ) VALUES (?, ?, ?, ?, ?, ?)
         `,
       [
+        familia_id,
         situacao_social?.participa_religiao || false,
         situacao_social?.religiao_qual || "",
         situacao_social?.participa_acao_social || false,
@@ -1846,7 +1847,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     // Check for removed programs
     for (const [programaId, valor] of oldProgramasMap) {
       if (!newProgramasMap.has(programaId)) {
-        const [programaInfo] = await db.query(`SELECT nome FROM programas_sociais WHERE id = ?`, [programaId])
+        const [programaInfo] = await db.query(`SELECT nome FROM programas_sociais_disponiveis WHERE id = ?`, [programaId])
         alteracoes.push({
           campo: `Programa Social Removido`,
           valor_antigo: `${programaInfo[0]?.nome || "Programa"} (R$ ${valor})`,
@@ -1857,7 +1858,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
 
     // Check for added or modified programs
     for (const [programaId, valor] of newProgramasMap) {
-      const [programaInfo] = await db.query(`SELECT nome FROM programas_sociais WHERE id = ?`, [programaId])
+      const [programaInfo] = await db.query(`SELECT nome FROM programas_sociais_disponiveis WHERE id = ?`, [programaId])
       const programaNome = programaInfo[0]?.nome || "Programa"
 
       if (!oldProgramasMap.has(programaId)) {

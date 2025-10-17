@@ -270,7 +270,7 @@ CREATE TABLE situacao_social (
 CREATE TABLE familia_servicos_publicos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     familia_id INT NOT NULL,
-    tipo ENUM('CRAS', 'CREAS', 'saude', 'educacao', 'esporte', 'habitacao', 'assistencia social'),
+    tipo ENUM('CRAS', 'CREAS', 'saude', 'educacao', 'esporte', 'habitacao', 'assistencia_social'),
     observacoes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

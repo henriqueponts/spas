@@ -623,12 +623,12 @@ const CadastroFamilia: React.FC = () => {
             <div key={etapa.id} className="flex items-center">
               <div
                 className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${isCompleta
-                    ? "bg-green-500 border-green-500 text-white"
-                    : isAtual
-                      ? "bg-blue-500 border-blue-500 text-white"
-                      : isAcessivel
-                        ? "border-gray-300 text-gray-500"
-                        : "border-gray-200 text-gray-300"
+                  ? "bg-green-500 border-green-500 text-white"
+                  : isAtual
+                    ? "bg-blue-500 border-blue-500 text-white"
+                    : isAcessivel
+                      ? "border-gray-300 text-gray-500"
+                      : "border-gray-200 text-gray-300"
                   }`}
               >
                 {isCompleta ? <Check className="w-5 h-5" /> : <Icone className="w-5 h-5" />}
@@ -1020,12 +1020,17 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Renda Mensal Individual</label>
                     <input
                       type="number"
+                      min="0" // Adiciona o atributo min para melhor semântica
                       placeholder="R$ 0,00"
                       value={dadosFamilia.responsavel.renda_mensal}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
                           ...prev,
-                          responsavel: { ...prev.responsavel, renda_mensal: Number.parseFloat(e.target.value) || 0 },
+                          responsavel: {
+                            ...prev.responsavel,
+                            // AQUI ESTÁ A MUDANÇA: Garante que o valor não seja negativo
+                            renda_mensal: Math.max(0, Number.parseFloat(e.target.value) || 0),
+                          },
                         }))
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1338,10 +1343,12 @@ const CadastroFamilia: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Renda Mensal Individual</label>
                         <input
                           type="number"
+                          min="0" // Adiciona o atributo min
                           placeholder="R$ 0,00"
                           value={integrante.renda_mensal}
                           onChange={(e) =>
-                            atualizarIntegrante(index, "renda_mensal", Number.parseFloat(e.target.value) || 0)
+                            // AQUI ESTÁ A MUDANÇA: Garante que o valor passado para a função não seja negativo
+                            atualizarIntegrante(index, "renda_mensal", Math.max(0, Number.parseFloat(e.target.value) || 0))
                           }
                           className={getInputClass(errors.integrantes?.[index]?.renda_mensal)}
                         />
@@ -1664,7 +1671,7 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de Cômodos</label>
                   <input
                     type="number"
-                    min="0" 
+                    min="0"
                     placeholder="Ex: 4"
                     value={dadosFamilia.habitacao.qtd_comodos}
                     onChange={(e) =>
