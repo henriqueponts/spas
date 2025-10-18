@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import api from "../services/api" // Importa a instância configurada do Axios
 import { useNavigate } from "react-router-dom" // Added useNavigate import for redirect after registration
 import Header from "../components/Header" // ✅ ADICIONADO: Import do componente Header
+import { useAlert } from "../components/ui/alert-container"
 
 // Interfaces para tipagem
 interface Cargo {
@@ -27,6 +28,7 @@ interface FormErrors {
 
 const Registro: React.FC = () => {
   const navigate = useNavigate() // Added navigate hook for redirect
+  const { showSucesso, showErro } = useAlert()
 
   const [values, setValues] = useState({
     nome: "",
@@ -41,6 +43,7 @@ const Registro: React.FC = () => {
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>([])
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
+ 
 
   // Buscar cargos e equipamentos ao carregar o componente
   useEffect(() => {
@@ -161,9 +164,10 @@ const Registro: React.FC = () => {
     try {
       // Usa a instância 'api' para enviar o token na requisição de registro
       await api.post("/auth/registro", values)
-      alert("Usuário criado com sucesso!")
+      showSucesso("Usuário criado com sucesso!")
       navigate("/usuarios")
     } catch (err) {
+      showErro("Falha ao criar o usuário.")
       console.error("Erro ao criar usuário:", err)
       if (err instanceof Error && "response" in err && err.response) {
         const axiosError = err as { response: { data: { message?: string } } }

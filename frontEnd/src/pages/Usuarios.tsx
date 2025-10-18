@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import { useAlert } from "../components/ui/alert-container"
 
 // Interfaces (mantidas como estão)
 interface Usuario {
@@ -49,6 +50,7 @@ const Usuarios: React.FC = () => {
   const [novaSenha, setNovaSenha] = useState("")
   const [mostrarNovaSenha, setMostrarNovaSenha] = useState(false)
   const [erroSenha, setErroSenha] = useState<string>("")
+  const { showErro } = useAlert()
 
   // Lógica de permissão mais robusta com useMemo
   const hasPermission = useMemo(() =>
@@ -123,7 +125,7 @@ const Usuarios: React.FC = () => {
       setUsuarios(usuarios.map((u) => (u.id === usuarioId ? { ...u, ativo: !u.ativo } : u)))
     } catch (error) {
       console.error("Erro ao alterar status:", error)
-      alert("Não foi possível alterar o status do usuário.")
+      showErro("Não foi possível alterar o status do usuário.")
     }
   }
 

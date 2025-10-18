@@ -35,7 +35,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
   }
 
   const showErro = (title: string, message?: string) => {
-    showAlert("erro", title, message, false)
+    showAlert("erro", title, message, true)
   }
 
   const showAviso = (title: string, message?: string) => {

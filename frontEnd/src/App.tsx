@@ -23,6 +23,7 @@ import Familias from "./pages/Familias"
 import AlterarFamilia from "./pages/AlterarFamilia"
 import Usuarios from "./pages/Usuarios"
 import Logs from "./pages/Logs"
+import { AlertProvider } from "./components/ui/alert-container"
 
 // Hook para proteger navegação baseado no cargo (MANTIDO)
 
@@ -233,7 +234,9 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AppContent />
+        <AlertProvider>
+          <AppContent />
+        </AlertProvider>
       </BrowserRouter>
     </AuthProvider>
   )
