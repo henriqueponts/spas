@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/Tabs"
 import { Badge } from "../components/ui/Badge"
 import { Separator } from "../components/ui/Separator"
+import { useAlert } from "../components/ui/alert-container"
 
 // --- ÍCONES (lucide-react) ---
 import {
@@ -191,6 +192,7 @@ const VisualizarFamilia: React.FC = () => {
   const [novaEvolucao, setNovaEvolucao] = useState("")
   const [mostrarFormEvolucao, setMostrarFormEvolucao] = useState(false)
   const [loadingEvolucao, setLoadingEvolucao] = useState(false)
+  const { showSucesso, showErro, showAviso } = useAlert()
 
   const isTecnico = user?.cargo_id === 3
   const isCoordenador = user?.cargo_id === 2
@@ -313,7 +315,7 @@ const VisualizarFamilia: React.FC = () => {
 
   const salvarEvolucao = async () => {
     if (!novaEvolucao.trim()) {
-      alert("Por favor, escreva uma descrição para a evolução.")
+      showAviso("Por favor, escreva uma descrição para a evolução.")
       return
     }
     setLoadingEvolucao(true)
@@ -336,10 +338,10 @@ const VisualizarFamilia: React.FC = () => {
       setMostrarFormEvolucao(false)
       await carregarEvolucoes()
       await carregarEncaminhamentos()
-      alert("Evolução registrada com sucesso!")
+      showSucesso("Evolução registrada com sucesso!")
     } catch (error) {
       console.error("Erro ao salvar evolução:", error)
-      alert("Erro ao salvar evolução. Tente novamente.")
+      showErro("Erro ao salvar evolução. Tente novamente.")
     } finally {
       setLoadingEvolucao(false)
     }
@@ -347,12 +349,12 @@ const VisualizarFamilia: React.FC = () => {
 
   const adicionarEncaminhamento = () => {
     if (localSelecionado === "") {
-      alert("Por favor, selecione um local de encaminhamento.")
+      showAviso("Por favor, selecione um local de encaminhamento.")
       return
     }
 
     if (encaminhamentosSelecionados.includes(Number(localSelecionado))) {
-      alert("Este local já foi adicionado.")
+      showAviso("Este local já foi adicionado.")
       return
     }
 
@@ -371,7 +373,7 @@ const VisualizarFamilia: React.FC = () => {
 
   const cadastrarNovoLocal = async () => {
     if (!nomeNovoLocal.trim()) {
-      alert("Por favor, informe o nome do local.")
+      showAviso("Por favor, informe o nome do local.")
       return
     }
 
@@ -381,10 +383,10 @@ const VisualizarFamilia: React.FC = () => {
       setNomeNovoLocal("")
       setMostrarFormNovoLocal(false)
       await carregarLocaisEncaminhamento()
-      alert("Local cadastrado com sucesso!")
+      showSucesso("Local cadastrado com sucesso!")
     } catch (error: any) {
       console.error("Erro ao cadastrar local:", error)
-      alert(error.response?.data?.message || "Erro ao cadastrar local. Tente novamente.")
+      showErro(error.response?.data?.message || "Erro ao cadastrar local. Tente novamente.")
     } finally {
       setLoadingNovoLocal(false)
     }
@@ -392,11 +394,11 @@ const VisualizarFamilia: React.FC = () => {
 
   const autorizarBeneficio = async () => {
     if (!dadosAutorizacao.tipo_beneficio) {
-      alert("Por favor, selecione o tipo de benefício.")
+      showAviso("Por favor, selecione o tipo de benefício.")
       return
     }
     if (!dadosAutorizacao.justificativa.trim()) {
-      alert("Por favor, informe a justificativa.")
+      showAviso("Por favor, informe a justificativa.")
       return
     }
 
@@ -414,7 +416,7 @@ const VisualizarFamilia: React.FC = () => {
       })
       setMostrarFormAutorizacao(false)
       await carregarAutorizacoes()
-      alert("Benefício autorizado com sucesso!")
+      showSucesso("Benefício autorizado com sucesso!")
 
       if (familia && user) {
         gerarReciboAutorizacao({
@@ -443,7 +445,7 @@ const VisualizarFamilia: React.FC = () => {
       }
     } catch (error) {
       console.error("Erro ao autorizar benefício:", error)
-      alert("Erro ao autorizar benefício. Tente novamente.")
+      showErro("Erro ao autorizar benefício. Tente novamente.")
     } finally {
       setLoadingEvolucao(false)
     }
@@ -454,7 +456,7 @@ const VisualizarFamilia: React.FC = () => {
     if (!autorizacaoParaCancelar) return
 
     if (!dadosCancelamento.motivo.trim()) {
-      alert("Por favor, informe o motivo do cancelamento.")
+      showAviso("Por favor, informe o motivo do cancelamento.")
       return
     }
 
@@ -476,7 +478,7 @@ const VisualizarFamilia: React.FC = () => {
       }
 
       await carregarAutorizacoes()
-      alert("Benefício cancelado com sucesso!")
+      showSucesso("Benefício cancelado com sucesso!")
 
       // Gerar recibo de cancelamento
       if (familia && user) {
@@ -515,7 +517,7 @@ const VisualizarFamilia: React.FC = () => {
       })
     } catch (error) {
       console.error("Erro ao cancelar benefício:", error)
-      alert("Erro ao cancelar benefício. Tente novamente.")
+      showErro("Erro ao cancelar benefício. Tente novamente.")
     } finally {
       setLoadingEvolucao(false)
     }
@@ -544,17 +546,17 @@ const VisualizarFamilia: React.FC = () => {
     if (!autorizacaoParaEditar) return
 
     if (!dadosEdicao.tipo_beneficio || !dadosEdicao.justificativa.trim() || !dadosEdicao.motivo_edicao.trim()) {
-      alert("Por favor, preencha todos os campos obrigatórios.")
+      showAviso("Por favor, preencha todos os campos obrigatórios.")
       return
     }
 
     if (dadosEdicao.quantidade < 1) {
-      alert("A quantidade deve ser maior que zero.")
+      showAviso("A quantidade deve ser maior que zero.")
       return
     }
 
     if (dadosEdicao.validade_meses < 1) {
-      alert("A validade deve ser maior que zero.")
+      showAviso("A validade deve ser maior que zero.")
       return
     }
 
@@ -566,7 +568,7 @@ const VisualizarFamilia: React.FC = () => {
       )
 
       await carregarAutorizacoes()
-      alert("Benefício editado com sucesso!")
+      showSucesso("Benefício editado com sucesso!")
 
       // Gerar recibo de edição
       if (familia && user && response.data) {
@@ -623,7 +625,7 @@ const VisualizarFamilia: React.FC = () => {
       })
     } catch (error: any) {
       console.error("Erro ao editar benefício:", error)
-      alert(error.response?.data?.message || "Erro ao editar benefício. Tente novamente.")
+      showErro(error.response?.data?.message || "Erro ao editar benefício. Tente novamente.")
     } finally {
       setLoadingEvolucao(false)
     }

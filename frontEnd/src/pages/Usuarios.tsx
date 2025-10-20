@@ -50,7 +50,7 @@ const Usuarios: React.FC = () => {
   const [novaSenha, setNovaSenha] = useState("")
   const [mostrarNovaSenha, setMostrarNovaSenha] = useState(false)
   const [erroSenha, setErroSenha] = useState<string>("")
-  const { showErro } = useAlert()
+  const { showErro, showSucesso } = useAlert()
 
   // Lógica de permissão mais robusta com useMemo
   const hasPermission = useMemo(() =>
@@ -116,7 +116,7 @@ const Usuarios: React.FC = () => {
 
   const alternarStatusUsuario = async (usuarioId: string) => {
     if (String(user?.id) === usuarioId && usuarios.find((u) => u.id === usuarioId)?.ativo) {
-      alert("Você não pode inativar seu próprio usuário!")
+      showErro("Você não pode inativar seu próprio usuário!")
       return
     }
 
@@ -159,23 +159,22 @@ const Usuarios: React.FC = () => {
       setUsuarioSelecionado(null)
       setNovaSenha("")
       setErroSenha("")
-      alert("Senha alterada com sucesso!")
+      showSucesso("Senha alterada com sucesso!")
     } catch (error: unknown) {
       console.error("Erro ao trocar senha:", error)
-      if (
-        error &&
-        typeof error === "object" &&
-        "response" in error &&
-        error.response &&
-        typeof error.response === "object" &&
-        "data" in error.response &&
-        error.response.data &&
-        typeof error.response.data === "object" &&
-        "message" in error.response.data
-      ) {
-        alert(error.response.data.message)
+      // extrai a mensagem de erro de forma segura (axios-like) e garante que seja string
+      const extractedMessage = (() => {
+        if (typeof error === "object" && error !== null && "response" in error) {
+          const errWithResponse = error as { response?: { data?: { message?: unknown } } }
+          const msg = errWithResponse.response?.data?.message
+          return typeof msg === "string" ? msg : undefined
+        }
+        return undefined
+      })()
+      if (typeof extractedMessage === "string" && extractedMessage.trim() !== "") {
+        showErro(extractedMessage)
       } else {
-        alert("Erro ao alterar senha")
+        showErro("Erro ao alterar senha")
       }
     }
   }
