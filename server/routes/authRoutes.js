@@ -5,35 +5,91 @@ import jwt from "jsonwebtoken"
 
 const router = express.Router()
 
+// Função auxiliar para criar uma única entrada de log com múltiplas alterações
+async function criarLogComMultiplasAlteracoes(dados) {
+  const { usuario_id, tipo_log, entidade, entidade_id, descricao, ip_address, alteracoes } = dados
+
+  let db // <-- CORREÇÃO: Variável declarada fora do try
+  try {
+    console.log("[v0] 📝 Criando log com múltiplas alterações...")
+    db = await connectToDatabase() // <-- CORREÇÃO: Atribuída dentro do try
+
+    // Entrada de registro
+    const [logResult] = await db.query(
+      `INSERT INTO logs_sistema
+       (usuario_id, tipo_log, entidade, entidade_id, descricao, ip_address)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [usuario_id, tipo_log, entidade, entidade_id, descricao, ip_address],
+    )
+
+    const log_id = logResult.insertId
+    console.log("[v0] ✅ Log criado com ID:", log_id)
+
+    // Entradas de alteração vinculadas ao mesmo log
+    for (const alteracao of alteracoes) {
+      await db.query(
+        `INSERT INTO logs_alteracoes
+         (log_id, campo, valor_antigo, valor_novo)
+         VALUES (?, ?, ?, ?)`,
+        [log_id, alteracao.campo, alteracao.valor_antigo || "", alteracao.valor_novo || ""],
+      )
+    }
+
+    console.log("[v0] ✅ Registradas", alteracoes.length, "alterações")
+  } catch (error) {
+    console.error("[v0] ❌ Erro ao criar log com múltiplas alterações:", error)
+    // Rollback transaction if an error occurs in a transactional context
+    if (db && db.rollback) {
+      // Check if db object and rollback method exist
+      await db.rollback()
+    }
+    throw error
+  }
+}
+
 router.post("/registro", async (req, res) => {
   console.log("📝 Rota de registro chamada")
   console.log("📦 Dados recebidos:", req.body)
 
   const { nome, cpf, email, cargo, equipamento, senha } = req.body
 
+  // ✅ ADICIONADO: Validações de campos obrigatórios no backend
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ message: "O campo Nome é obrigatório." })
+  }
+  if (!cargo) {
+    return res.status(400).json({ message: "Por favor, selecione um cargo." })
+  }
+  if (!equipamento) {
+    return res.status(400).json({ message: "Por favor, selecione um equipamento." })
+  }
+
   try {
     const db = await connectToDatabase()
 
     // Se há token (usuário logado), verificar se é DIRETOR
     const authHeader = req.headers["authorization"]
+    let loggedUserId = null // Variable to store the ID of the user performing the action
     if (authHeader) {
       try {
         const token = authHeader.split(" ")[1]
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
+        loggedUserId = decoded.id // Store the logged-in user's ID
 
-        // Verificar se é DIRETOR
+        // Verificar se é DIRETOR ou COORDENADOR
         const [userResult] = await db.query(
           `
-                    SELECT c.nome as cargo_nome 
-                    FROM usuarios u 
-                    JOIN cargos c ON u.cargo_id = c.id 
+                    SELECT c.nome as cargo_nome
+                    FROM usuarios u
+                    JOIN cargos c ON u.cargo_id = c.id
                     WHERE u.id = ?
                 `,
           [decoded.id],
         )
 
-        if (userResult.length === 0 || userResult[0].cargo_nome !== "DIRETOR") {
-          return res.status(403).json({ message: "Apenas diretores podem criar usuários" })
+        const cargosPermitidos = ["DIRETOR", "COORDENADOR"]
+        if (userResult.length === 0 || !cargosPermitidos.includes(userResult[0].cargo_nome)) {
+          return res.status(403).json({ message: "Apenas diretores e coordenadores podem criar usuários" })
         }
       } catch (tokenError) {
         return res.status(401).json({ message: "Token inválido" })
@@ -58,13 +114,23 @@ router.post("/registro", async (req, res) => {
     const hashPassword = await bcrypt.hash(senha, 10)
 
     // Inserir usuário
-    await db.query(
+    const [result] = await db.query(
       `
-            INSERT INTO usuarios (nome, cpf, email, senha_hash, cargo_id, equipamento_id) 
+            INSERT INTO usuarios (nome, cpf, email, senha_hash, cargo_id, equipamento_id)
             VALUES (?, ?, ?, ?, ?, ?)
         `,
       [nome, cpf, email || null, hashPassword, cargo, equipamento],
     )
+
+    const novoUsuarioId = result.insertId
+    await criarLog({
+      usuario_id: loggedUserId || novoUsuarioId, // Use logged user ID or new user ID
+      tipo_log: "criacao",
+      entidade: "usuario",
+      entidade_id: novoUsuarioId,
+      descricao: `Novo usuário criado: ${nome}`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
     console.log("✅ Usuário criado com sucesso!")
     res.status(201).json({ message: "Usuário registrado com sucesso!" })
@@ -80,7 +146,7 @@ router.post("/login", async (req, res) => {
     const db = await connectToDatabase()
     const [rows] = await db.query(
       `
-            SELECT 
+            SELECT
                 u.*,
                 c.nome as cargo_nome,
                 e.nome as equipamento_nome
@@ -102,6 +168,15 @@ router.post("/login", async (req, res) => {
     }
 
     await db.query("UPDATE usuarios SET ultimo_login = NOW() WHERE id = ?", [rows[0].id])
+
+    const logId = await criarLog({
+      usuario_id: rows[0].id,
+      tipo_log: "login",
+      entidade: "usuario",
+      entidade_id: rows[0].id,
+      descricao: `Login realizado por ${rows[0].nome}`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
     const token = jwt.sign({ id: rows[0].id }, process.env.JWT_SECRET, { expiresIn: "3h" })
 
@@ -178,7 +253,7 @@ router.get("/home", verifyToken, async (req, res) => {
     const db = await connectToDatabase()
     const [rows] = await db.query(
       `
-            SELECT 
+            SELECT
                 u.id, u.nome, u.cargo_id, c.nome as cargo_nome,
                 u.equipamento_id, e.nome as equipamento_nome
             FROM usuarios u
@@ -199,11 +274,7 @@ router.get("/home", verifyToken, async (req, res) => {
   }
 })
 
-// ============================================
-// 1. PRIMEIRO - ADICIONE ESTAS ROTAS SIMPLES PARA TESTAR
-// ============================================
-
-// Teste básico - adicione no final do seu authRoutes.js
+// Teste básico
 router.get("/test-familia", (req, res) => {
   res.json({ message: "Rota de teste funcionando!" })
 })
@@ -216,12 +287,11 @@ router.get("/familias", verifyToken, async (req, res) => {
 
     // Query principal - buscar famílias
     const [familias] = await db.query(`
-            SELECT 
+            SELECT
                 f.id,
                 f.prontuario,
                 f.data_cadastro,
                 f.data_atendimento,
-                f.situacao,
                 e.nome as equipamento_nome,
                 e.regiao as equipamento_regiao,
                 u.nome as profissional_nome
@@ -251,7 +321,7 @@ router.get("/familias", verifyToken, async (req, res) => {
 
       // Buscar integrantes
       const [integrantes] = await db.query(
-        'SELECT nome_completo, tipo_membro FROM pessoas WHERE familia_id = ? AND tipo_membro != "responsavel"',
+        'SELECT nome_completo, tipo_membro, cpf FROM pessoas WHERE familia_id = ? AND tipo_membro != "responsavel"', // <-- ADICIONADO `cpf` AQUI
         [familia.id],
       )
 
@@ -265,7 +335,6 @@ router.get("/familias", verifyToken, async (req, res) => {
         prontuario: familia.prontuario,
         data_cadastro: familia.data_cadastro,
         data_atendimento: familia.data_atendimento,
-        situacao: familia.situacao,
         equipamento_nome: familia.equipamento_nome,
         equipamento_regiao: familia.equipamento_regiao,
         profissional_nome: familia.profissional_nome,
@@ -298,26 +367,22 @@ router.get("/familias", verifyToken, async (req, res) => {
   }
 })
 
-// ============================================
-// 2. ROTAS CORRIGIDAS COM LOGS DE DEBUG
-// ============================================
-
 // Rota para buscar apenas usuários técnicos
 router.get("/usuarios/tecnicos", async (req, res) => {
   console.log("🔍 Buscando usuários técnicos...")
   try {
     const db = await connectToDatabase()
     const [usuarios] = await db.query(`
-            SELECT 
-                u.id, 
+            SELECT
+                u.id,
                 u.nome,
                 c.nome as cargo_nome,
                 e.nome as equipamento_nome
             FROM usuarios u
             JOIN cargos c ON u.cargo_id = c.id
             JOIN equipamento e ON u.equipamento_id = e.id
-            WHERE u.ativo = true 
-            AND c.nome IN ('ASSISTENTE', 'TECNICO')
+            WHERE u.ativo = true
+            AND c.nome IN ( 'TECNICO')
             ORDER BY u.nome
         `)
     console.log("✅ Usuários técnicos encontrados:", usuarios.length)
@@ -334,9 +399,9 @@ router.get("/programas-sociais", async (req, res) => {
   try {
     const db = await connectToDatabase()
     const [programas] = await db.query(`
-            SELECT id, codigo, nome, valor_padrao 
-            FROM programas_sociais_disponiveis 
-            WHERE ativo = TRUE 
+            SELECT id, codigo, nome, valor_padrao
+            FROM programas_sociais_disponiveis
+            WHERE ativo = TRUE
             ORDER BY nome
         `)
     console.log("✅ Programas sociais encontrados:", programas.length)
@@ -353,9 +418,9 @@ router.get("/tipos-despesas", async (req, res) => {
   try {
     const db = await connectToDatabase()
     const [tipos] = await db.query(`
-            SELECT id, codigo, nome, obrigatoria 
-            FROM tipos_despesas 
-            WHERE ativo = TRUE 
+            SELECT id, codigo, nome, obrigatoria
+            FROM tipos_despesas
+            WHERE ativo = TRUE
             ORDER BY obrigatoria DESC, nome
         `)
     console.log("✅ Tipos de despesas encontrados:", tipos.length)
@@ -366,25 +431,15 @@ router.get("/tipos-despesas", async (req, res) => {
   }
 })
 
-// ============================================
-// 3. ROTA DE CADASTRO COM LOGS DETALHADOS
-// ============================================
-
 router.post("/familias", verifyToken, async (req, res) => {
   console.log("🚀 ROTA /familias CHAMADA!")
   console.log("🔑 User ID do token:", req.userId)
   console.log("📦 Body recebido:", JSON.stringify(req.body, null, 2))
-  console.log("🏠 Iniciando cadastro de família...")
-  console.log("📝 Dados recebidos:", {
-    responsavel: req.body.responsavel?.nome_completo,
-    endereco: req.body.endereco?.logradouro,
-    profissional_id: req.body.profissional_id,
-    equipamento_id: req.body.equipamento_id,
-  })
 
-  const db = await connectToDatabase()
+  let db // <-- CORREÇÃO: Variável declarada fora do try
 
   try {
+    db = await connectToDatabase() // <-- CORREÇÃO: Atribuída dentro do try
     console.log("🔄 Iniciando transação...")
     await db.beginTransaction()
 
@@ -427,12 +482,11 @@ router.post("/familias", verifyToken, async (req, res) => {
     const [familiaResult] = await db.query(
       `
             INSERT INTO familias (
-                equipamento_id, 
-                data_cadastro, 
-                data_atendimento, 
-                profissional_id,
-                situacao
-            ) VALUES (?, CURDATE(), ?, ?, 'ativo')
+                equipamento_id,
+                data_cadastro,
+                data_atendimento,
+                profissional_id
+            ) VALUES (?, CURDATE(), ?, ?)
         `,
       [equipamento_id, data_atendimento, profissional_id],
     )
@@ -440,13 +494,22 @@ router.post("/familias", verifyToken, async (req, res) => {
     const familia_id = familiaResult.insertId
     console.log("✅ Família inserida com ID:", familia_id)
 
+    await criarLog({
+      usuario_id: req.userId,
+      tipo_log: "criacao",
+      entidade: "familia",
+      entidade_id: familia_id,
+      descricao: `Família cadastrada - Responsável: ${responsavel.nome_completo}`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
+
     // 2. Inserir responsável familiar
     console.log("👤 Inserindo responsável...")
     await db.query(
       `
             INSERT INTO pessoas (
-                familia_id, nome_completo, data_nascimento, sexo, cpf, rg, 
-                estado_civil, escolaridade, naturalidade, telefone, telefone_recado, 
+                familia_id, nome_completo, data_nascimento, sexo, cpf, rg,
+                estado_civil, escolaridade, naturalidade, telefone, telefone_recado,
                 email, nis, titulo_eleitor, ctps, tipo_membro, ocupacao, renda_mensal
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'responsavel', ?, ?)
         `,
@@ -477,7 +540,7 @@ router.post("/familias", verifyToken, async (req, res) => {
     await db.query(
       `
             INSERT INTO enderecos (
-                familia_id, logradouro, numero, complemento, bairro, cidade, 
+                familia_id, logradouro, numero, complemento, bairro, cidade,
                 uf, cep, referencia, tempo_moradia
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
@@ -523,11 +586,7 @@ router.post("/familias", verifyToken, async (req, res) => {
 
     // 5. Inserir dados de habitação
     console.log("🏡 Inserindo dados de habitação...")
-    const tipo_construcao_str = Array.isArray(habitacao?.tipo_construcao) ? habitacao.tipo_construcao.join(",") : ""
-    const condicao_domicilio_str = Array.isArray(habitacao?.condicao_domicilio)
-      ? habitacao.condicao_domicilio.join(",")
-      : ""
-
+    // <-- CORREÇÃO: Lógica antiga de array removida
     await db.query(
       `
             INSERT INTO habitacao (
@@ -539,13 +598,13 @@ router.post("/familias", verifyToken, async (req, res) => {
         familia_id,
         habitacao?.qtd_comodos || 0,
         habitacao?.qtd_dormitorios || 0,
-        tipo_construcao_str,
+        habitacao?.tipo_construcao || "alvenaria", // <-- CORREÇÃO: Passando o valor string diretamente
         habitacao?.area_conflito || false,
-        condicao_domicilio_str,
+        habitacao?.condicao_domicilio || "propria_quitada", // <-- CORREÇÃO: Passando o valor string diretamente
         habitacao?.energia_eletrica || "propria",
         habitacao?.agua || "propria",
         habitacao?.esgoto || "rede",
-        habitacao?.coleta_lixo || true,
+        habitacao?.coleta_lixo !== undefined ? habitacao.coleta_lixo : true,
       ],
     )
     console.log("✅ Dados de habitação inseridos")
@@ -683,7 +742,10 @@ router.post("/familias", verifyToken, async (req, res) => {
     })
   } catch (error) {
     console.log("❌ Erro no cadastro, fazendo rollback...")
-    await db.rollback()
+    if (db) {
+      // <-- CORREÇÃO: Verifica se 'db' existe antes do rollback
+      await db.rollback()
+    }
     console.error("💥 Erro detalhado:", error)
 
     if (error.code === "ER_DUP_ENTRY") {
@@ -695,10 +757,6 @@ router.post("/familias", verifyToken, async (req, res) => {
     }
   }
 })
-
-// ============================================
-// 4. SCRIPT PARA VERIFICAR SE AS TABELAS EXISTEM
-// ============================================
 
 router.get("/verificar-tabelas", async (req, res) => {
   try {
@@ -739,7 +797,6 @@ router.get("/verificar-tabelas", async (req, res) => {
   }
 })
 
-// Rota de busca Familia (específica)
 router.get("/familias/buscar", async (req, res) => {
   try {
     const db = await connectToDatabase()
@@ -763,27 +820,27 @@ router.get("/familias/buscar", async (req, res) => {
 
     const likeTerm = `%${termo}%`
     switch (tipo) {
-      case "nome": // Busca por nome do responsável
+      case "nome":
         sqlQuery += ` AND p_resp.nome_completo LIKE ?`
         params.push(likeTerm)
         break
-      case "cpf": // Busca por CPF do responsável
+      case "cpf":
         sqlQuery += ` AND p_resp.cpf LIKE ?`
         params.push(likeTerm)
         break
-      case "prontuario": // Busca por prontuário da família
+      case "prontuario":
         sqlQuery += ` AND f.prontuario LIKE ?`
         params.push(likeTerm)
         break
-      case "membro_nome": // Nova busca por nome de membro da família
+      case "membro_nome":
         sqlQuery += ` AND p_membro.nome_completo LIKE ?`
         params.push(likeTerm)
         break
-      case "membro_cpf": // Nova busca por CPF de membro da família
+      case "membro_cpf":
         sqlQuery += ` AND p_membro.cpf LIKE ?`
         params.push(likeTerm)
         break
-      case "membro_nis": // Nova busca por NIS de membro da família
+      case "membro_nis":
         sqlQuery += ` AND p_membro.nis LIKE ?`
         params.push(likeTerm)
         break
@@ -799,13 +856,8 @@ router.get("/familias/buscar", async (req, res) => {
   }
 })
 
-// ============================================
-// ENDPOINT COM DEBUG MELHORADO - ADICIONE NO authRoutes.js
-// ============================================
-
 router.get("/familias/:id", verifyToken, async (req, res) => {
   console.log("🔍 INICIANDO busca da família ID:", req.params.id)
-  console.log("👤 Usuário logado ID:", req.userId)
 
   const db = await connectToDatabase()
 
@@ -813,16 +865,13 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
     const familia_id = Number.parseInt(req.params.id)
 
     if (isNaN(familia_id)) {
-      console.log("❌ ID inválido:", req.params.id)
       return res.status(400).json({ message: "ID da família inválido" })
     }
-
-    console.log("📋 Buscando dados básicos da família...")
 
     // 1. Buscar dados básicos da família
     const [familiaResult] = await db.query(
       `
-            SELECT 
+            SELECT
                 f.*,
                 e.nome as equipamento_nome,
                 e.regiao as equipamento_regiao,
@@ -837,98 +886,77 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
       [familia_id],
     )
 
-    console.log("✅ Dados básicos encontrados:", familiaResult.length)
-
     if (familiaResult.length === 0) {
-      console.log("❌ Família não encontrada para ID:", familia_id)
       return res.status(404).json({ message: "Família não encontrada" })
     }
 
     const familia = familiaResult[0]
-    console.log("📊 Família encontrada:", {
-      id: familia.id,
-      prontuario: familia.prontuario,
-      responsavel_nome: "será buscado...",
-    })
 
     // 2. Buscar dados do responsável
-    console.log("👤 Buscando responsável...")
     const [responsavelResult] = await db.query(
       `
             SELECT *
-            FROM pessoas 
+            FROM pessoas
             WHERE familia_id = ? AND tipo_membro = 'responsavel'
         `,
       [familia_id],
     )
-    console.log("✅ Responsável encontrado:", responsavelResult.length)
 
-    // 3. Buscar integrantes da família (exceto responsável)
-    console.log("👨‍👩‍👧‍👦 Buscando integrantes...")
+    // 3. Buscar integrantes da família
     const [integrantesResult] = await db.query(
       `
             SELECT *
-            FROM pessoas 
+            FROM pessoas
             WHERE familia_id = ? AND tipo_membro != 'responsavel'
             ORDER BY data_nascimento ASC
         `,
       [familia_id],
     )
-    console.log("✅ Integrantes encontrados:", integrantesResult.length)
 
     // 4. Buscar endereço
-    console.log("🏠 Buscando endereço...")
     const [enderecoResult] = await db.query(
       `
             SELECT *
-            FROM enderecos 
+            FROM enderecos
             WHERE familia_id = ?
         `,
       [familia_id],
     )
-    console.log("✅ Endereço encontrado:", enderecoResult.length)
 
     // 5. Buscar dados de saúde
-    console.log("🏥 Buscando dados de saúde...")
     const [saudeResult] = await db.query(
       `
             SELECT *
-            FROM saude 
+            FROM saude
             WHERE familia_id = ?
         `,
       [familia_id],
     )
-    console.log("✅ Dados de saúde encontrados:", saudeResult.length)
 
     // 6. Buscar dados de habitação
-    console.log("🏡 Buscando dados de habitação...")
     const [habitacaoResult] = await db.query(
       `
             SELECT *
-            FROM habitacao 
+            FROM habitacao
             WHERE familia_id = ?
         `,
       [familia_id],
     )
-    console.log("✅ Dados de habitação encontrados:", habitacaoResult.length)
 
     // 7. Buscar trabalho e renda
-    console.log("💼 Buscando trabalho e renda...")
     const [trabalhoRendaResult] = await db.query(
       `
             SELECT *
-            FROM trabalho_renda 
+            FROM trabalho_renda
             WHERE familia_id = ?
         `,
       [familia_id],
     )
-    console.log("✅ Trabalho e renda encontrados:", trabalhoRendaResult.length)
 
     // 8. Buscar programas sociais
-    console.log("🤝 Buscando programas sociais...")
     const [programasSociaisResult] = await db.query(
       `
-            SELECT 
+            SELECT
                 fps.*,
                 psd.nome as programa_nome,
                 psd.codigo as programa_codigo
@@ -938,13 +966,11 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
         `,
       [familia_id],
     )
-    console.log("✅ Programas sociais encontrados:", programasSociaisResult.length)
 
     // 9. Buscar despesas
-    console.log("💰 Buscando despesas...")
     const [despesasResult] = await db.query(
       `
-            SELECT 
+            SELECT
                 fd.*,
                 td.nome as tipo_nome,
                 td.codigo as tipo_codigo
@@ -955,33 +981,28 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
         `,
       [familia_id],
     )
-    console.log("✅ Despesas encontradas:", despesasResult.length)
 
     // 10. Buscar situação social
-    console.log("👥 Buscando situação social...")
     const [situacaoSocialResult] = await db.query(
       `
             SELECT *
-            FROM situacao_social 
+            FROM situacao_social
             WHERE familia_id = ?
         `,
       [familia_id],
     )
-    console.log("✅ Situação social encontrada:", situacaoSocialResult.length)
 
     // 11. Buscar serviços públicos
-    console.log("🏛️ Buscando serviços públicos...")
     const [servicosPublicosResult] = await db.query(
       `
             SELECT tipo
-            FROM familia_servicos_publicos 
+            FROM familia_servicos_publicos
             WHERE familia_id = ?
         `,
       [familia_id],
     )
-    console.log("✅ Serviços públicos encontrados:", servicosPublicosResult.length)
 
-    // Processar dados de habitação (converter SET para array)
+    // Processar dados de habitação
     const habitacao = habitacaoResult[0] || {}
     if (habitacao.tipo_construcao) {
       habitacao.tipo_construcao = habitacao.tipo_construcao.split(",").filter(Boolean)
@@ -997,16 +1018,12 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
 
     // Montar resposta completa
     const familiaCompleta = {
-      // Dados básicos
       id: familia.id,
       prontuario: familia.prontuario,
       data_cadastro: familia.data_cadastro,
       data_atendimento: familia.data_atendimento,
-      situacao: familia.situacao,
-      profissional_id: familia.profissional_id, // CORRIGIDO: Adicionado ID do profissional
-      equipamento_id: familia.equipamento_id, // CORRIGIDO: Adicionado ID do equipamento
-
-      // Equipamento e profissional
+      profissional_id: familia.profissional_id,
+      equipamento_id: familia.equipamento_id,
       equipamento: {
         id: familia.equipamento_id,
         nome: familia.equipamento_nome,
@@ -1017,17 +1034,9 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
         nome: familia.profissional_nome,
         cargo_nome: familia.profissional_cargo,
       },
-
-      // Responsável familiar
       responsavel: responsavelResult[0] || {},
-
-      // Endereço
       endereco: enderecoResult[0] || {},
-
-      // Integrantes
       integrantes: integrantesResult,
-
-      // Saúde
       saude: saudeResult[0] || {
         tem_deficiencia: false,
         deficiencia_qual: "",
@@ -1039,8 +1048,6 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
         dependente_quem: "",
         observacoes: "",
       },
-
-      // Habitação
       habitacao: {
         qtd_comodos: habitacao.qtd_comodos || 0,
         qtd_dormitorios: habitacao.qtd_dormitorios || 0,
@@ -1050,32 +1057,24 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
         energia_eletrica: habitacao.energia_eletrica || "propria",
         agua: habitacao.agua || "propria",
         esgoto: habitacao.esgoto || "rede",
-        coleta_lixo: habitacao.coleta_lixo || true,
+        coleta_lixo: habitacao.coleta_lixo !== undefined ? !!habitacao.coleta_lixo : true,
       },
-
-      // Trabalho e renda
       trabalho_renda: trabalhoRendaResult[0] || {
         quem_trabalha: "",
         rendimento_total: 0,
       },
-
-      // Programas sociais
       programas_sociais: programasSociaisResult.map((programa) => ({
-        programa_id: programa.programa_id, // CORRIGIDO
+        programa_id: programa.programa_id,
         programa_nome: programa.programa_nome,
         programa_codigo: programa.programa_codigo,
         valor: programa.valor,
       })),
-
-      // Despesas
       despesas: despesasResult.map((despesa) => ({
-        tipo_despesa_id: despesa.tipo_despesa_id, // CORRIGIDO
+        tipo_despesa_id: despesa.tipo_despesa_id,
         tipo_nome: despesa.tipo_nome,
         tipo_codigo: despesa.tipo_codigo,
         valor: despesa.valor,
       })),
-
-      // Situação social
       situacao_social: {
         ...(situacaoSocialResult[0] || {
           participa_religiao: false,
@@ -1088,16 +1087,9 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
       },
     }
 
-    console.log("🎉 Montagem da resposta concluída!")
-    console.log(
-      "📤 Enviando resposta com dados de:",
-      familiaCompleta.responsavel.nome_completo || "Nome não encontrado",
-    )
-
     res.json(familiaCompleta)
   } catch (error) {
-    console.error("❌ ERRO DETALHADO ao buscar família:", error)
-    console.error("📍 Stack trace:", error.stack)
+    console.error("❌ ERRO ao buscar família:", error)
     res.status(500).json({
       message: "Erro interno do servidor",
       error: error.message,
@@ -1105,25 +1097,52 @@ router.get("/familias/:id", verifyToken, async (req, res) => {
   }
 })
 
-// ============================================
-// ROTA PARA ATUALIZAR FAMÍLIA EXISTENTE
-// ============================================
 router.put("/familias/:id", verifyToken, async (req, res) => {
   console.log("🔄 ROTA PUT /familias/:id CHAMADA!")
-  console.log("🆔 ID da família:", req.params.id)
-  console.log("🔑 User ID do token:", req.userId)
-  console.log("📦 Body recebido:", JSON.stringify(req.body, null, 2))
 
-  const db = await connectToDatabase()
+  let db // <-- CORREÇÃO: Variável declarada fora do try
 
   try {
+    db = await connectToDatabase() // <-- CORREÇÃO: Atribuída dentro do try
+
     const familia_id = Number.parseInt(req.params.id)
 
     if (isNaN(familia_id)) {
       return res.status(400).json({ message: "ID da família inválido" })
     }
 
-    console.log("🔄 Iniciando transação para atualização...")
+    const [familiaAntiga] = await db.query(
+      `
+      SELECT f.*,
+             p.nome_completo, p.data_nascimento, p.sexo, p.cpf, p.rg, p.orgao_expedidor,
+             p.estado_civil, p.naturalidade, p.telefone, p.telefone_recado, p.email,
+             p.nis, p.titulo_eleitor, p.ctps, p.escolaridade, p.ocupacao, p.renda_mensal,
+             e.logradouro, e.numero, e.complemento, e.bairro, e.cidade, e.uf, e.cep,
+             e.referencia, e.tempo_moradia,
+             s.tem_deficiencia, s.deficiencia_qual, s.tem_tratamento_saude, s.tratamento_qual,
+             s.usa_medicacao_continua, s.medicacao_qual, s.tem_dependente_cuidados, s.dependente_quem,
+             s.observacoes as saude_observacoes,
+             h.qtd_comodos, h.qtd_dormitorios, h.tipo_construcao, h.area_conflito,
+             h.condicao_domicilio, h.energia_eletrica, h.agua, h.esgoto, h.coleta_lixo,
+             tr.quem_trabalha, tr.rendimento_total, tr.observacoes as trabalho_observacoes,
+             ss.participa_religiao, ss.religiao_qual, ss.participa_acao_social, ss.acao_social_qual,
+             ss.observacoes as situacao_observacoes
+      FROM familias f
+      LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+      LEFT JOIN enderecos e ON f.id = e.familia_id
+      LEFT JOIN saude s ON f.id = s.familia_id
+      LEFT JOIN habitacao h ON f.id = h.familia_id
+      LEFT JOIN trabalho_renda tr ON f.id = tr.familia_id
+      LEFT JOIN situacao_social ss ON f.id = ss.familia_id
+      WHERE f.id = ?
+    `,
+      [familia_id],
+    )
+
+    if (familiaAntiga.length === 0) {
+      return res.status(404).json({ message: "Família não encontrada" })
+    }
+
     await db.beginTransaction()
 
     const {
@@ -1155,8 +1174,6 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
       throw new Error("Equipamento é obrigatório")
     }
 
-    console.log("✅ Validações básicas passaram")
-
     // Verificar se a família existe
     const [familiaExiste] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
     if (familiaExiste.length === 0) {
@@ -1164,10 +1181,9 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
     }
 
     // 1. Atualizar dados básicos da família
-    console.log("👨‍👩‍👧‍👦 Atualizando dados básicos da família...")
     await db.query(
       `
-            UPDATE familias SET 
+            UPDATE familias SET
                 equipamento_id = ?,
                 data_atendimento = ?,
                 profissional_id = ?,
@@ -1176,16 +1192,14 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         `,
       [equipamento_id, data_atendimento, profissional_id, familia_id],
     )
-    console.log("✅ Dados básicos da família atualizados")
 
     // 2. Atualizar responsável familiar
-    console.log("👤 Atualizando responsável...")
     await db.query(
       `
-            UPDATE pessoas SET 
-                nome_completo = ?, data_nascimento = ?, sexo = ?, cpf = ?, rg = ?,
-                estado_civil = ?, escolaridade = ?, naturalidade = ?, telefone = ?, 
-                telefone_recado = ?, email = ?, nis = ?, titulo_eleitor = ?, ctps = ?, 
+            UPDATE pessoas SET
+                nome_completo = ?, data_nascimento = ?, sexo = ?, cpf = ?, rg = ?, orgao_expedidor = ?,
+                estado_civil = ?, escolaridade = ?, naturalidade = ?, telefone = ?,
+                telefone_recado = ?, email = ?, nis = ?, titulo_eleitor = ?, ctps = ?,
                 ocupacao = ?, renda_mensal = ?
             WHERE familia_id = ? AND tipo_membro = 'responsavel'
         `,
@@ -1195,6 +1209,7 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         responsavel.sexo || "feminino",
         responsavel.cpf || "",
         responsavel.rg || "",
+        responsavel.orgao_expedidor || "",
         responsavel.estado_civil || "",
         responsavel.escolaridade || "",
         responsavel.naturalidade || "",
@@ -1209,13 +1224,11 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         familia_id,
       ],
     )
-    console.log("✅ Responsável atualizado")
 
     // 3. Atualizar endereço
-    console.log("🏠 Atualizando endereço...")
     await db.query(
       `
-            UPDATE enderecos SET 
+            UPDATE enderecos SET
                 logradouro = ?, numero = ?, complemento = ?, bairro = ?, cidade = ?,
                 uf = ?, cep = ?, referencia = ?, tempo_moradia = ?
             WHERE familia_id = ?
@@ -1233,13 +1246,11 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         familia_id,
       ],
     )
-    console.log("✅ Endereço atualizado")
 
     // 4. Atualizar dados de saúde
-    console.log("🏥 Atualizando dados de saúde...")
     await db.query(
       `
-            UPDATE saude SET 
+            UPDATE saude SET
                 tem_deficiencia = ?, deficiencia_qual = ?, tem_tratamento_saude = ?,
                 tratamento_qual = ?, usa_medicacao_continua = ?, medicacao_qual = ?,
                 tem_dependente_cuidados = ?, dependente_quem = ?, observacoes = ?
@@ -1258,55 +1269,50 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         familia_id,
       ],
     )
-    console.log("✅ Dados de saúde atualizados")
 
     // 5. Atualizar dados de habitação
-    console.log("🏡 Atualizando dados de habitação...")
-    const tipo_construcao_str = Array.isArray(habitacao?.tipo_construcao) ? habitacao.tipo_construcao.join(",") : ""
-    const condicao_domicilio_str = Array.isArray(habitacao?.condicao_domicilio)
-      ? habitacao.condicao_domicilio.join(",")
-      : ""
-
+    // <-- CORREÇÃO: Lógica antiga de array removida
     await db.query(
       `
-            UPDATE habitacao SET 
-                qtd_comodos = ?, qtd_dormitorios = ?, tipo_construcao = ?,
-                area_conflito = ?, condicao_domicilio = ?, energia_eletrica = ?, 
+            UPDATE habitacao SET
+                qtd_comodos = ?,qtd_dormitorios = ?, tipo_construcao = ?,
+                area_conflito = ?, condicao_domicilio = ?, energia_eletrica = ?,
                 agua = ?, esgoto = ?, coleta_lixo = ?
             WHERE familia_id = ?
         `,
       [
         habitacao?.qtd_comodos || 0,
         habitacao?.qtd_dormitorios || 0,
-        tipo_construcao_str,
+        habitacao?.tipo_construcao || "alvenaria", // <-- CORREÇÃO: Passando o valor string diretamente
         habitacao?.area_conflito || false,
-        condicao_domicilio_str,
+        habitacao?.condicao_domicilio || "propria_quitada", // <-- CORREÇÃO: Passando o valor string diretamente
         habitacao?.energia_eletrica || "propria",
         habitacao?.agua || "propria",
         habitacao?.esgoto || "rede",
-        habitacao?.coleta_lixo || true,
+        habitacao?.coleta_lixo !== undefined ? habitacao.coleta_lixo : true,
         familia_id,
       ],
     )
-    console.log("✅ Dados de habitação atualizados")
 
     // 6. Atualizar trabalho e renda
-    console.log("💼 Atualizando trabalho e renda...")
     await db.query(
       `
-            UPDATE trabalho_renda SET 
-                quem_trabalha = ?, rendimento_total = ?
+            UPDATE trabalho_renda SET
+                quem_trabalha = ?, rendimento_total = ?, observacoes = ?
             WHERE familia_id = ?
         `,
-      [trabalho_renda?.quem_trabalha || "", trabalho_renda?.rendimento_total || 0, familia_id],
+      [
+        trabalho_renda?.quem_trabalha || "",
+        trabalho_renda?.rendimento_total || 0,
+        trabalho_renda?.observacoes || "",
+        familia_id,
+      ],
     )
-    console.log("✅ Trabalho e renda atualizados")
 
     // 7. Atualizar situação social
-    console.log("👥 Atualizando situação social...")
     await db.query(
       `
-            UPDATE situacao_social SET 
+            UPDATE situacao_social SET
                 participa_religiao = ?, religiao_qual = ?, participa_acao_social = ?,
                 acao_social_qual = ?, observacoes = ?
             WHERE familia_id = ?
@@ -1320,22 +1326,12 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         familia_id,
       ],
     )
-    console.log("✅ Situação social atualizada")
 
-    // 8. Atualizar integrantes (remover todos e inserir novamente)
-    console.log("👨‍👩‍👧‍👦 Atualizando integrantes...")
+    // 8. Atualizar integrantes
     await db.query('DELETE FROM pessoas WHERE familia_id = ? AND tipo_membro != "responsavel"', [familia_id])
 
     if (integrantes && Array.isArray(integrantes) && integrantes.length > 0) {
-      for (let i = 0; i < integrantes.length; i++) {
-        const integrante = integrantes[i]
-
-        if (!integrante.data_nascimento) {
-          throw new Error(`Data de nascimento do integrante '${integrante.nome_completo}' é obrigatória`)
-        } else if (!isDateInPast(integrante.data_nascimento)) {
-          throw new Error(`Data de nascimento do integrante '${integrante.nome_completo}' não pode ser no futuro`)
-        }
-
+      for (const integrante of integrantes) {
         await db.query(
           `
                     INSERT INTO pessoas (
@@ -1367,10 +1363,8 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         )
       }
     }
-    console.log("✅ Integrantes atualizados")
 
-    // 9. Atualizar programas sociais (remover todos e inserir novamente)
-    console.log("🤝 Atualizando programas sociais...")
+    // 9. Atualizar programas sociais
     await db.query("DELETE FROM familia_programas_sociais WHERE familia_id = ?", [familia_id])
 
     if (programas_sociais && Array.isArray(programas_sociais) && programas_sociais.length > 0) {
@@ -1385,10 +1379,8 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         )
       }
     }
-    console.log("✅ Programas sociais atualizados")
 
-    // 10. Atualizar despesas (remover todos e inserir novamente)
-    console.log("💰 Atualizando despesas...")
+    // 10. Atualizar despesas
     await db.query("DELETE FROM familia_despesas WHERE familia_id = ?", [familia_id])
 
     if (despesas && Array.isArray(despesas) && despesas.length > 0) {
@@ -1405,10 +1397,8 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         }
       }
     }
-    console.log("✅ Despesas atualizadas")
 
-    // 11. Atualizar serviços públicos (remover todos e inserir novamente)
-    console.log("🏛️ Atualizando serviços públicos...")
+    // 11. Atualizar serviços públicos
     await db.query("DELETE FROM familia_servicos_publicos WHERE familia_id = ?", [familia_id])
 
     if (situacao_social?.servicos_publicos && Array.isArray(situacao_social.servicos_publicos)) {
@@ -1422,34 +1412,611 @@ router.put("/familias/:id", verifyToken, async (req, res) => {
         )
       }
     }
-    console.log("✅ Serviços públicos atualizados")
 
-    console.log("✅ Fazendo commit da transação...")
+    const alteracoes = []
+    const old = familiaAntiga[0]
+
+    // Responsável fields
+    if (old.nome_completo !== responsavel.nome_completo) {
+      alteracoes.push({
+        campo: "Nome do Responsável",
+        valor_antigo: old.nome_completo || "",
+        valor_novo: responsavel.nome_completo || "",
+      })
+    }
+
+    if (old.cpf !== responsavel.cpf) {
+      alteracoes.push({
+        campo: "CPF",
+        valor_antigo: old.cpf || "",
+        valor_novo: responsavel.cpf || "",
+      })
+    }
+
+    if (old.rg !== responsavel.rg) {
+      alteracoes.push({
+        campo: "RG",
+        valor_antigo: old.rg || "",
+        valor_novo: responsavel.rg || "",
+      })
+    }
+
+    if (old.orgao_expedidor !== responsavel.orgao_expedidor) {
+      alteracoes.push({
+        campo: "Órgão Expedidor",
+        valor_antigo: old.orgao_expedidor || "",
+        valor_novo: responsavel.orgao_expedidor || "",
+      })
+    }
+
+    if (old.data_nascimento !== responsavel.data_nascimento) {
+      alteracoes.push({
+        campo: "Data de Nascimento",
+        valor_antigo: old.data_nascimento || "",
+        valor_novo: responsavel.data_nascimento || "",
+      })
+    }
+
+    if (old.sexo !== responsavel.sexo) {
+      alteracoes.push({
+        campo: "Sexo",
+        valor_antigo: old.sexo || "",
+        valor_novo: responsavel.sexo || "",
+      })
+    }
+
+    if (old.estado_civil !== responsavel.estado_civil) {
+      alteracoes.push({
+        campo: "Estado Civil",
+        valor_antigo: old.estado_civil || "",
+        valor_novo: responsavel.estado_civil || "",
+      })
+    }
+
+    if (old.naturalidade !== responsavel.naturalidade) {
+      alteracoes.push({
+        campo: "Naturalidade",
+        valor_antigo: old.naturalidade || "",
+        valor_novo: responsavel.naturalidade || "",
+      })
+    }
+
+    if (old.telefone !== responsavel.telefone) {
+      alteracoes.push({
+        campo: "Telefone",
+        valor_antigo: old.telefone || "",
+        valor_novo: responsavel.telefone || "",
+      })
+    }
+
+    if (old.telefone_recado !== responsavel.telefone_recado) {
+      alteracoes.push({
+        campo: "Telefone de Recado",
+        valor_antigo: old.telefone_recado || "",
+        valor_novo: responsavel.telefone_recado || "",
+      })
+    }
+
+    if (old.email !== responsavel.email) {
+      alteracoes.push({
+        campo: "Email",
+        valor_antigo: old.email || "",
+        valor_novo: responsavel.email || "",
+      })
+    }
+
+    if (old.nis !== responsavel.nis) {
+      alteracoes.push({
+        campo: "NIS",
+        valor_antigo: old.nis || "",
+        valor_novo: responsavel.nis || "",
+      })
+    }
+
+    if (old.titulo_eleitor !== responsavel.titulo_eleitor) {
+      alteracoes.push({
+        campo: "Título de Eleitor",
+        valor_antigo: old.titulo_eleitor || "",
+        valor_novo: responsavel.titulo_eleitor || "",
+      })
+    }
+
+    if (old.ctps !== responsavel.ctps) {
+      alteracoes.push({
+        campo: "CTPS",
+        valor_antigo: old.ctps || "",
+        valor_novo: responsavel.ctps || "",
+      })
+    }
+
+    if (old.escolaridade !== responsavel.escolaridade) {
+      alteracoes.push({
+        campo: "Escolaridade",
+        valor_antigo: old.escolaridade || "",
+        valor_novo: responsavel.escolaridade || "",
+      })
+    }
+
+    if (old.ocupacao !== responsavel.ocupacao) {
+      alteracoes.push({
+        campo: "Ocupação",
+        valor_antigo: old.ocupacao || "",
+        valor_novo: responsavel.ocupacao || "",
+      })
+    }
+
+    if (old.renda_mensal !== responsavel.renda_mensal) {
+      alteracoes.push({
+        campo: "Renda Mensal",
+        valor_antigo: String(old.renda_mensal || 0),
+        valor_novo: String(responsavel.renda_mensal || 0),
+      })
+    }
+
+    // Endereço fields
+    if (old.logradouro !== endereco.logradouro) {
+      alteracoes.push({
+        campo: "Logradouro",
+        valor_antigo: old.logradouro || "",
+        valor_novo: endereco.logradouro || "",
+      })
+    }
+
+    if (old.numero !== endereco.numero) {
+      alteracoes.push({
+        campo: "Número",
+        valor_antigo: old.numero || "",
+        valor_novo: endereco.numero || "",
+      })
+    }
+
+    if (old.complemento !== endereco.complemento) {
+      alteracoes.push({
+        campo: "Complemento",
+        valor_antigo: old.complemento || "",
+        valor_novo: endereco.complemento || "",
+      })
+    }
+
+    if (old.bairro !== endereco.bairro) {
+      alteracoes.push({
+        campo: "Bairro",
+        valor_antigo: old.bairro || "",
+        valor_novo: endereco.bairro || "",
+      })
+    }
+
+    if (old.cidade !== endereco.cidade) {
+      alteracoes.push({
+        campo: "Cidade",
+        valor_antigo: old.cidade || "",
+        valor_novo: endereco.cidade || "",
+      })
+    }
+
+    if (old.uf !== endereco.uf) {
+      alteracoes.push({
+        campo: "UF",
+        valor_antigo: old.uf || "",
+        valor_novo: endereco.uf || "",
+      })
+    }
+
+    if (old.cep !== endereco.cep) {
+      alteracoes.push({
+        campo: "CEP",
+        valor_antigo: old.cep || "",
+        valor_novo: endereco.cep || "",
+      })
+    }
+
+    if (old.referencia !== endereco.referencia) {
+      alteracoes.push({
+        campo: "Ponto de Referência",
+        valor_antigo: old.referencia || "",
+        valor_novo: endereco.referencia || "",
+      })
+    }
+
+    if (old.tempo_moradia !== endereco.tempo_moradia) {
+      alteracoes.push({
+        campo: "Tempo de Moradia",
+        valor_antigo: old.tempo_moradia || "",
+        valor_novo: endereco.tempo_moradia || "",
+      })
+    }
+
+    if (old.tem_deficiencia !== (saude?.tem_deficiencia || false)) {
+      alteracoes.push({
+        campo: "Tem Deficiência",
+        valor_antigo: old.tem_deficiencia ? "Sim" : "Não",
+        valor_novo: saude?.tem_deficiencia || false ? "Sim" : "Não",
+      })
+    }
+
+    if (old.deficiencia_qual !== (saude?.deficiencia_qual || "")) {
+      alteracoes.push({
+        campo: "Qual Deficiência",
+        valor_antigo: old.deficiencia_qual || "",
+        valor_novo: saude?.deficiencia_qual || "",
+      })
+    }
+
+    if (old.tem_tratamento_saude !== (saude?.tem_tratamento_saude || false)) {
+      alteracoes.push({
+        campo: "Tem Tratamento de Saúde",
+        valor_antigo: old.tem_tratamento_saude ? "Sim" : "Não",
+        valor_novo: saude?.tem_tratamento_saude || false ? "Sim" : "Não",
+      })
+    }
+
+    if (old.tratamento_qual !== (saude?.tratamento_qual || "")) {
+      alteracoes.push({
+        campo: "Qual Tratamento",
+        valor_antigo: old.tratamento_qual || "",
+        valor_novo: saude?.tratamento_qual || "",
+      })
+    }
+
+    if (old.usa_medicacao_continua !== (saude?.usa_medicacao_continua || false)) {
+      alteracoes.push({
+        campo: "Usa Medicação Contínua",
+        valor_antigo: old.usa_medicacao_continua ? "Sim" : "Não",
+        valor_novo: saude?.usa_medicacao_continua || false ? "Sim" : "Não",
+      })
+    }
+
+    if (old.medicacao_qual !== (saude?.medicacao_qual || "")) {
+      alteracoes.push({
+        campo: "Qual Medicação",
+        valor_antigo: old.medicacao_qual || "",
+        valor_novo: saude?.medicacao_qual || "",
+      })
+    }
+
+    if (old.tem_dependente_cuidados !== (saude?.tem_dependente_cuidados || false)) {
+      alteracoes.push({
+        campo: "Tem Dependente com Cuidados Especiais",
+        valor_antigo: old.tem_dependente_cuidados ? "Sim" : "Não",
+        valor_novo: saude?.tem_dependente_cuidados || false ? "Sim" : "Não",
+      })
+    }
+
+    if (old.dependente_quem !== (saude?.dependente_quem || "")) {
+      alteracoes.push({
+        campo: "Quem é o Dependente",
+        valor_antigo: old.dependente_quem || "",
+        valor_novo: saude?.dependente_quem || "",
+      })
+    }
+
+    if (old.saude_observacoes !== (saude?.observacoes || "")) {
+      alteracoes.push({
+        campo: "Observações de Saúde",
+        valor_antigo: old.saude_observacoes || "",
+        valor_novo: saude?.observacoes || "",
+      })
+    }
+
+    if (old.qtd_comodos !== (habitacao?.qtd_comodos || 0)) {
+      alteracoes.push({
+        campo: "Quantidade de Cômodos",
+        valor_antigo: String(old.qtd_comodos || 0),
+        valor_novo: String(habitacao?.qtd_comodos || 0),
+      })
+    }
+
+    if (old.qtd_dormitorios !== (habitacao?.qtd_dormitorios || 0)) {
+      alteracoes.push({
+        campo: "Quantidade de Dormitórios",
+        valor_antigo: String(old.qtd_dormitorios || 0),
+        valor_novo: String(habitacao?.qtd_dormitorios || 0),
+      })
+    }
+
+    if (old.tipo_construcao !== (habitacao?.tipo_construcao || "alvenaria")) {
+      alteracoes.push({
+        campo: "Tipo de Construção",
+        valor_antigo: old.tipo_construcao || "",
+        valor_novo: habitacao?.tipo_construcao || "",
+      })
+    }
+
+    if (old.area_conflito !== (habitacao?.area_conflito || false)) {
+      alteracoes.push({
+        campo: "Área de Risco/Conflito",
+        valor_antigo: old.area_conflito ? "Sim" : "Não",
+        valor_novo: habitacao?.area_conflito || false ? "Sim" : "Não",
+      })
+    }
+
+    if (old.condicao_domicilio !== (habitacao?.condicao_domicilio || "propria_quitada")) {
+      alteracoes.push({
+        campo: "Condição do Domicílio",
+        valor_antigo: old.condicao_domicilio || "",
+        valor_novo: habitacao?.condicao_domicilio || "",
+      })
+    }
+
+    if (old.energia_eletrica !== (habitacao?.energia_eletrica || "propria")) {
+      alteracoes.push({
+        campo: "Energia Elétrica",
+        valor_antigo: old.energia_eletrica || "",
+        valor_novo: habitacao?.energia_eletrica || "",
+      })
+    }
+
+    if (old.agua !== (habitacao?.agua || "propria")) {
+      alteracoes.push({
+        campo: "Abastecimento de Água",
+        valor_antigo: old.agua || "",
+        valor_novo: habitacao?.agua || "",
+      })
+    }
+
+    if (old.esgoto !== (habitacao?.esgoto || "rede")) {
+      alteracoes.push({
+        campo: "Esgotamento Sanitário",
+        valor_antigo: old.esgoto || "",
+        valor_novo: habitacao?.esgoto || "",
+      })
+    }
+
+    const oldColetaLixo = old.coleta_lixo !== undefined ? old.coleta_lixo : true
+    const newColetaLixo = habitacao?.coleta_lixo !== undefined ? habitacao.coleta_lixo : true
+    if (oldColetaLixo !== newColetaLixo) {
+      alteracoes.push({
+        campo: "Coleta de Lixo",
+        valor_antigo: oldColetaLixo ? "Sim" : "Não",
+        valor_novo: newColetaLixo ? "Sim" : "Não",
+      })
+    }
+
+    if (old.quem_trabalha !== (trabalho_renda?.quem_trabalha || "")) {
+      alteracoes.push({
+        campo: "Quem Trabalha",
+        valor_antigo: old.quem_trabalha || "",
+        valor_novo: trabalho_renda?.quem_trabalha || "",
+      })
+    }
+
+    if (old.rendimento_total !== (trabalho_renda?.rendimento_total || 0)) {
+      alteracoes.push({
+        campo: "Rendimento Total",
+        valor_antigo: `R$ ${old.rendimento_total || 0}`,
+        valor_novo: `R$ ${trabalho_renda?.rendimento_total || 0}`,
+      })
+    }
+
+    if (old.trabalho_observacoes !== (trabalho_renda?.observacoes || "")) {
+      alteracoes.push({
+        campo: "Observações de Trabalho/Renda",
+        valor_antigo: old.trabalho_observacoes || "",
+        valor_novo: trabalho_renda?.observacoes || "",
+      })
+    }
+
+    if (old.participa_religiao !== (situacao_social?.participa_religiao || false)) {
+      alteracoes.push({
+        campo: "Participa de Religião",
+        valor_antigo: old.participa_religiao ? "Sim" : "Não",
+        valor_novo: situacao_social?.participa_religiao || false ? "Sim" : "Não",
+      })
+    }
+
+    if (old.religiao_qual !== (situacao_social?.religiao_qual || "")) {
+      alteracoes.push({
+        campo: "Qual Religião",
+        valor_antigo: old.religiao_qual || "",
+        valor_novo: situacao_social?.religiao_qual || "",
+      })
+    }
+
+    if (old.participa_acao_social !== (situacao_social?.participa_acao_social || false)) {
+      alteracoes.push({
+        campo: "Participa de Ação Social",
+        valor_antigo: old.participa_acao_social ? "Sim" : "Não",
+        valor_novo: situacao_social?.participa_acao_social || false ? "Sim" : "Não",
+      })
+    }
+
+    if (old.acao_social_qual !== (situacao_social?.acao_social_qual || "")) {
+      alteracoes.push({
+        campo: "Qual Ação Social",
+        valor_antigo: old.acao_social_qual || "",
+        valor_novo: situacao_social?.acao_social_qual || "",
+      })
+    }
+
+    if (old.situacao_observacoes !== (situacao_social?.observacoes || "")) {
+      alteracoes.push({
+        campo: "Observações de Situação Social",
+        valor_antigo: old.situacao_observacoes || "",
+        valor_novo: situacao_social?.observacoes || "",
+      })
+    }
+
+    const [oldProgramas] = await db.query(
+      `SELECT programa_id, valor FROM familia_programas_sociais WHERE familia_id = ?`,
+      [familia_id],
+    )
+
+    const oldProgramasMap = new Map(oldProgramas.map((p) => [p.programa_id, p.valor]))
+    const newProgramasMap = new Map((programas_sociais || []).map((p) => [p.programa_id, p.valor]))
+
+    // Check for removed programs
+    for (const [programaId, valor] of oldProgramasMap) {
+      if (!newProgramasMap.has(programaId)) {
+        const [programaInfo] = await db.query(`SELECT nome FROM programas_sociais_disponiveis WHERE id = ?`, [programaId])
+        alteracoes.push({
+          campo: `Programa Social Removido`,
+          valor_antigo: `${programaInfo[0]?.nome || "Programa"} (R$ ${valor})`,
+          valor_novo: "",
+        })
+      }
+    }
+
+    // Check for added or modified programs
+    for (const [programaId, valor] of newProgramasMap) {
+      const [programaInfo] = await db.query(`SELECT nome FROM programas_sociais_disponiveis WHERE id = ?`, [programaId])
+      const programaNome = programaInfo[0]?.nome || "Programa"
+
+      if (!oldProgramasMap.has(programaId)) {
+        alteracoes.push({
+          campo: `Programa Social Adicionado`,
+          valor_antigo: "",
+          valor_novo: `${programaNome} (R$ ${valor})`,
+        })
+      } else if (oldProgramasMap.get(programaId) !== valor) {
+        alteracoes.push({
+          campo: `Valor do Programa ${programaNome}`,
+          valor_antigo: `R$ ${oldProgramasMap.get(programaId)}`,
+          valor_novo: `R$ ${valor}`,
+        })
+      }
+    }
+
+    const [oldDespesas] = await db.query(`SELECT tipo_despesa_id, valor FROM familia_despesas WHERE familia_id = ?`, [
+      familia_id,
+    ])
+
+    const oldDespesasMap = new Map(oldDespesas.map((d) => [d.tipo_despesa_id, d.valor]))
+    const newDespesasMap = new Map((despesas || []).filter((d) => d.valor > 0).map((d) => [d.tipo_despesa_id, d.valor]))
+
+    // Check for removed expenses
+    for (const [tipoId, valor] of oldDespesasMap) {
+      if (!newDespesasMap.has(tipoId)) {
+        const [tipoInfo] = await db.query(`SELECT nome FROM tipos_despesas WHERE id = ?`, [tipoId])
+        alteracoes.push({
+          campo: `Despesa Removida`,
+          valor_antigo: `${tipoInfo[0]?.nome || "Despesa"} (R$ ${valor})`,
+          valor_novo: "",
+        })
+      }
+    }
+
+    // Check for added or modified expenses
+    for (const [tipoId, valor] of newDespesasMap) {
+      const [tipoInfo] = await db.query(`SELECT nome FROM tipos_despesas WHERE id = ?`, [tipoId])
+      const tipoNome = tipoInfo[0]?.nome || "Despesa"
+
+      if (!oldDespesasMap.has(tipoId)) {
+        alteracoes.push({
+          campo: `Despesa Adicionada`,
+          valor_antigo: "",
+          valor_novo: `${tipoNome} (R$ ${valor})`,
+        })
+      } else if (oldDespesasMap.get(tipoId) !== valor) {
+        alteracoes.push({
+          campo: `Valor da Despesa ${tipoNome}`,
+          valor_antigo: `R$ ${oldDespesasMap.get(tipoId)}`,
+          valor_novo: `R$ ${valor}`,
+        })
+      }
+    }
+
+    const [oldServicos] = await db.query(`SELECT tipo FROM familia_servicos_publicos WHERE familia_id = ?`, [
+      familia_id,
+    ])
+
+    const oldServicosSet = new Set(oldServicos.map((s) => s.tipo))
+    const newServicosSet = new Set(situacao_social?.servicos_publicos || [])
+
+    // Check for removed services
+    for (const servico of oldServicosSet) {
+      if (!newServicosSet.has(servico)) {
+        alteracoes.push({
+          campo: `Serviço Público Removido`,
+          valor_antigo: servico.toUpperCase(),
+          valor_novo: "",
+        })
+      }
+    }
+
+    // Check for added services
+    for (const servico of newServicosSet) {
+      if (!oldServicosSet.has(servico)) {
+        alteracoes.push({
+          campo: `Serviço Público Adicionado`,
+          valor_antigo: "",
+          valor_novo: servico.toUpperCase(),
+        })
+      }
+    }
+
+    const [oldIntegrantes] = await db.query(
+      `SELECT nome_completo, cpf, tipo_membro FROM pessoas WHERE familia_id = ? AND tipo_membro != 'responsavel'`,
+      [familia_id],
+    )
+
+    const oldIntegrantesSet = new Set(oldIntegrantes.map((i) => `${i.nome_completo}|${i.cpf}`))
+    const newIntegrantesSet = new Set((integrantes || []).map((i) => `${i.nome_completo}|${i.cpf}`))
+
+    // Check for removed members
+    for (const integrante of oldIntegrantes) {
+      const key = `${integrante.nome_completo}|${integrante.cpf}`
+      if (!newIntegrantesSet.has(key)) {
+        alteracoes.push({
+          campo: `Integrante Removido`,
+          valor_antigo: `${integrante.nome_completo} (${integrante.tipo_membro})`,
+          valor_novo: "",
+        })
+      }
+    }
+
+    // Check for added members
+    for (const integrante of integrantes || []) {
+      const key = `${integrante.nome_completo}|${integrante.cpf}`
+      if (!oldIntegrantesSet.has(key)) {
+        alteracoes.push({
+          campo: `Integrante Adicionado`,
+          valor_antigo: "",
+          valor_novo: `${integrante.nome_completo} (${integrante.tipo_membro})`,
+        })
+      }
+    }
+
+    if (alteracoes.length > 0) {
+      await criarLogComMultiplasAlteracoes({
+        usuario_id: req.userId,
+        tipo_log: "atualizacao",
+        entidade: "familia",
+        entidade_id: familia_id,
+        descricao: `Família atualizada - ${alteracoes.length} campo(s) modificado(s)`,
+        ip_address: req.ip || req.connection.remoteAddress,
+        alteracoes: alteracoes,
+      })
+    } else {
+      // If no specific changes tracked, log general update
+      await criarLog({
+        usuario_id: req.userId,
+        tipo_log: "atualizacao",
+        entidade: "familia",
+        entidade_id: familia_id,
+        descricao: `Dados da família atualizados`,
+        ip_address: req.ip || req.connection.remoteAddress,
+      })
+    }
+
     await db.commit()
 
-    console.log("🎉 Família atualizada com sucesso! ID:", familia_id)
     res.status(200).json({
       message: "Família atualizada com sucesso!",
       familia_id: familia_id,
     })
   } catch (error) {
-    console.log("❌ Erro na atualização, fazendo rollback...")
-    await db.rollback()
-    console.error("💥 Erro detalhado:", error)
-
-    if (error.code === "ER_DUP_ENTRY") {
-      res.status(400).json({ message: "CPF já cadastrado no sistema" })
-    } else if (error.message) {
-      res.status(400).json({ message: error.message })
-    } else {
-      res.status(500).json({ message: "Erro interno do servidor" })
+    if (db) {
+      // <-- CORREÇÃO: Verifica se 'db' existe antes do rollback
+      await db.rollback()
     }
+    console.error("❌ ERRO ao atualizar família:", error)
+    res.status(500).json({
+      message: error.message || "Erro ao atualizar família",
+    })
   }
 })
 
 router.get("/familias/:id/evolucoes", verifyToken, async (req, res) => {
-  console.log("🔍 Buscando evoluções da família:", req.params.id)
-
   const db = await connectToDatabase()
 
   try {
@@ -1467,7 +2034,7 @@ router.get("/familias/:id/evolucoes", verifyToken, async (req, res) => {
     }
 
     const cargo_id = userResult[0].cargo_id
-    const podeVisualizar = cargo_id === 1 || cargo_id === 2 || cargo_id === 3 // Diretor, Coordenador ou Técnico
+    const podeVisualizar = cargo_id === 1 || cargo_id === 2 || cargo_id === 3
 
     if (!podeVisualizar) {
       return res.status(403).json({
@@ -1475,10 +2042,9 @@ router.get("/familias/:id/evolucoes", verifyToken, async (req, res) => {
       })
     }
 
-    // Buscar evoluções com informações do usuário
     const [evolucoes] = await db.query(
       `
-            SELECT 
+            SELECT
                 e.*,
                 u.nome as usuario_nome,
                 c.nome as usuario_cargo
@@ -1491,7 +2057,6 @@ router.get("/familias/:id/evolucoes", verifyToken, async (req, res) => {
       [familia_id],
     )
 
-    console.log(`✅ ${evolucoes.length} evoluções encontradas`)
     res.json(evolucoes)
   } catch (error) {
     console.error("❌ Erro ao buscar evoluções:", error)
@@ -1502,10 +2067,7 @@ router.get("/familias/:id/evolucoes", verifyToken, async (req, res) => {
   }
 })
 
-// Criar nova evolução
 router.post("/familias/:id/evolucoes", verifyToken, async (req, res) => {
-  console.log("📝 Criando nova evolução para família:", req.params.id)
-
   const db = await connectToDatabase()
 
   try {
@@ -1528,7 +2090,7 @@ router.post("/familias/:id/evolucoes", verifyToken, async (req, res) => {
     }
 
     const cargo_id = userResult[0].cargo_id
-    const podeCadastrar = cargo_id === 2 || cargo_id === 3 // Coordenador ou Técnico
+    const podeCadastrar = cargo_id === 2 || cargo_id === 3
 
     if (!podeCadastrar) {
       return res.status(403).json({
@@ -1536,32 +2098,38 @@ router.post("/familias/:id/evolucoes", verifyToken, async (req, res) => {
       })
     }
 
-    // Verificar se a família existe
     const [familiaResult] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
 
     if (familiaResult.length === 0) {
       return res.status(404).json({ message: "Família não encontrada" })
     }
 
-    // Inserir a evolução
     const dataAtual = new Date()
-    const data_evolucao = dataAtual.toISOString().split("T")[0] // YYYY-MM-DD
-    const hora_evolucao = dataAtual.toTimeString().split(" ")[0] // HH:MM:SS
+    const data_evolucao = dataAtual.toISOString().split("T")[0]
+    const hora_evolucao = dataAtual.toTimeString().split(" ")[0]
 
     const [result] = await db.query(
       `
             INSERT INTO evolucoes (
-                familia_id, 
-                usuario_id, 
-                data_evolucao, 
-                hora_evolucao, 
+                familia_id,
+                usuario_id,
+                data_evolucao,
+                hora_evolucao,
                 descricao
             ) VALUES (?, ?, ?, ?, ?)
         `,
       [familia_id, usuario_id, data_evolucao, hora_evolucao, descricao],
     )
 
-    console.log("✅ Evolução criada com ID:", result.insertId)
+    // Log evolution creation
+    await criarLog({
+      usuario_id: usuario_id,
+      tipo_log: "criacao",
+      entidade: "evolucoes",
+      entidade_id: result.insertId,
+      descricao: `Evolução registrada para a família ID ${familia_id}`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
     res.status(201).json({
       message: "Evolução registrada com sucesso",
@@ -1576,22 +2144,13 @@ router.post("/familias/:id/evolucoes", verifyToken, async (req, res) => {
   }
 })
 
-// Rotas de Encaminhamento (corrigida e única)
 router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
-  console.log("📝 Criando encaminhamentos para família:", req.params.id)
-  console.log("[v0] Dados recebidos:", req.body)
-
   const db = await connectToDatabase()
 
   try {
     const familia_id = Number.parseInt(req.params.id)
     const usuario_id = req.userId
     const { evolucao_id, locais_ids } = req.body
-
-    console.log("[v0] familia_id:", familia_id)
-    console.log("[v0] usuario_id:", usuario_id)
-    console.log("[v0] evolucao_id:", evolucao_id)
-    console.log("[v0] locais_ids:", locais_ids)
 
     if (isNaN(familia_id)) {
       return res.status(400).json({ message: "ID da família inválido" })
@@ -1604,7 +2163,7 @@ router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
     }
 
     const cargo_id = userResult[0].cargo_id
-    const podeCadastrar = cargo_id === 2 || cargo_id === 3 // Coordenador ou Técnico
+    const podeCadastrar = cargo_id === 2 || cargo_id === 3
 
     if (!podeCadastrar) {
       return res.status(403).json({
@@ -1616,16 +2175,12 @@ router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Selecione pelo menos um local de encaminhamento" })
     }
 
-    // Verificar se a família existe
     const [familiaResult] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
 
     if (familiaResult.length === 0) {
       return res.status(404).json({ message: "Família não encontrada" })
     }
 
-    console.log("[v0] Família encontrada")
-
-    // Verificar se a evolução existe (se foi fornecida)
     if (evolucao_id) {
       const [evolucaoResult] = await db.query("SELECT id FROM evolucoes WHERE id = ? AND familia_id = ?", [
         evolucao_id,
@@ -1635,21 +2190,15 @@ router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
       if (evolucaoResult.length === 0) {
         return res.status(404).json({ message: "Evolução não encontrada" })
       }
-      console.log("[v0] Evolução encontrada:", evolucao_id)
     }
 
     const data_encaminhamento = new Date().toISOString().split("T")[0]
-
-    // Inserir os encaminhamentos
     const encaminhamentosInseridos = []
 
     for (const local_id of locais_ids) {
-      console.log("[v0] Inserindo encaminhamento para local:", local_id)
-
       const [localResult] = await db.query("SELECT id FROM local_encaminhamento WHERE id = ?", [local_id])
 
       if (localResult.length === 0) {
-        console.warn(`⚠️ Local de encaminhamento ${local_id} não encontrado, pulando...`)
         continue
       }
 
@@ -1667,10 +2216,17 @@ router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
       )
 
       encaminhamentosInseridos.push(result.insertId)
-      console.log(`✅ Encaminhamento criado com ID: ${result.insertId}`)
     }
 
-    console.log("✅ Todos os encaminhamentos criados:", encaminhamentosInseridos)
+    // Log encaminhamento creation
+    await criarLog({
+      usuario_id: usuario_id,
+      tipo_log: "criacao",
+      entidade: "encaminhamentos",
+      entidade_id: encaminhamentosInseridos.join(", "), // Pode ser uma lista de IDs
+      descricao: `Encaminhamento(s) registrado(s) para a família ID ${familia_id} para ${locais_ids.length} local(is)`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
     res.status(201).json({
       message: "Encaminhamentos registrados com sucesso",
@@ -1686,42 +2242,26 @@ router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
 })
 
 router.get("/usuarios", verifyToken, async (req, res) => {
-  // ADICIONE ESTES LOGS
-  console.log("===========================================")
-  console.log("🕵️  ROTA GET /usuarios ACESSADA")
-  console.log("🔑 ID do usuário (do token):", req.userId)
-  // FIM DOS LOGS
-
   try {
     const db = await connectToDatabase()
 
-    // Verificar se o usuário logado é DIRETOR
     const [userResult] = await db.query(
       `
-            SELECT c.nome as cargo_nome 
-            FROM usuarios u 
-            JOIN cargos c ON u.cargo_id = c.id 
+            SELECT c.nome as cargo_nome
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
             WHERE u.id = ?
         `,
       [req.userId],
     )
 
-    // ADICIONE ESTE LOG
-    console.log("📦 Resultado da query de permissão:", userResult)
-
-    if (userResult.length === 0 || userResult[0].cargo_nome !== "DIRETOR") {
-      // ADICIONE ESTE LOG
-      console.log("🚫 ACESSO NEGADO! O usuário não é DIRETOR.")
-      console.log("===========================================")
-      return res.status(403).json({ message: "Acesso negado. Permissão de Diretor necessária." })
+    const cargosPermitidos = ["DIRETOR", "COORDENADOR"]
+    if (userResult.length === 0 || !cargosPermitidos.includes(userResult[0].cargo_nome)) {
+      return res.status(403).json({ message: "Acesso negado. Permissão de Diretor ou Coordenador necessária." })
     }
 
-    // ADICIONE ESTE LOG
-    console.log("✅ Acesso PERMITIDO! Buscando lista de usuários...")
-
-    // Buscar todos os usuários com informações completas
     const [usuarios] = await db.query(`
-            SELECT 
+            SELECT
                 u.id,
                 u.nome,
                 u.cpf,
@@ -1739,19 +2279,14 @@ router.get("/usuarios", verifyToken, async (req, res) => {
             ORDER BY u.nome ASC
         `)
 
-    console.log(`✅ ${usuarios.length} usuários encontrados e enviados.`)
-    console.log("===========================================")
     res.json(usuarios)
   } catch (error) {
-    console.error("❌ Erro GERAL na rota /usuarios:", error)
-    console.log("===========================================")
+    console.error("❌ Erro ao buscar usuários:", error)
     res.status(500).json({ message: "Erro interno ao buscar usuários" })
   }
 })
-// Alterar status do usuário (ativar/inativar)
-router.put("/usuarios/:id/status", verifyToken, async (req, res) => {
-  console.log("🔄 Alterando status do usuário:", req.params.id)
 
+router.put("/usuarios/:id/status", verifyToken, async (req, res) => {
   try {
     const db = await connectToDatabase()
     const usuario_id = Number.parseInt(req.params.id)
@@ -1760,23 +2295,22 @@ router.put("/usuarios/:id/status", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "ID do usuário inválido" })
     }
 
-    // Verificar se o usuário logado é DIRETOR
     const [userResult] = await db.query(
       `
-            SELECT c.nome as cargo_nome 
-            FROM usuarios u 
-            JOIN cargos c ON u.cargo_id = c.id 
+            SELECT c.nome as cargo_nome
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
             WHERE u.id = ?
         `,
       [req.userId],
     )
 
-    if (userResult.length === 0 || userResult[0].cargo_nome !== "DIRETOR") {
-      return res.status(403).json({ message: "Acesso negado" })
+    const cargosPermitidos = ["DIRETOR", "COORDENADOR"]
+    if (userResult.length === 0 || !cargosPermitidos.includes(userResult[0].cargo_nome)) {
+      return res.status(403).json({ message: "Acesso negado. Apenas diretores ou coordenadores podem alterar status." })
     }
 
-    // Verificar se o usuário existe
-    const [usuarioExiste] = await db.query("SELECT id, ativo FROM usuarios WHERE id = ?", [usuario_id])
+    const [usuarioExiste] = await db.query("SELECT id, nome, ativo FROM usuarios WHERE id = ?", [usuario_id])
 
     if (usuarioExiste.length === 0) {
       return res.status(404).json({ message: "Usuário não encontrado" })
@@ -1786,12 +2320,27 @@ router.put("/usuarios/:id/status", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Você não pode inativar seu próprio usuário!" })
     }
 
-    // Alternar status
     const novoStatus = !usuarioExiste[0].ativo
 
-    await db.query("UPDATE usuarios SET ativo = ? WHERE id = ?", [novoStatus, usuario_id])
+    const logId = await criarLog({
+      usuario_id: req.userId,
+      tipo_log: "atualizacao",
+      entidade: "usuario",
+      entidade_id: usuario_id,
+      descricao: `Status do usuário ${usuarioExiste[0].nome} alterado`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
-    console.log(`✅ Status do usuário ${usuario_id} alterado para: ${novoStatus ? "ativo" : "inativo"}`)
+    if (logId) {
+      await criarLogAlteracao({
+        log_id: logId,
+        campo: "ativo",
+        valor_antigo: usuarioExiste[0].ativo ? "Ativo" : "Inativo",
+        valor_novo: novoStatus ? "Ativo" : "Inativo",
+      })
+    }
+
+    await db.query("UPDATE usuarios SET ativo = ? WHERE id = ?", [novoStatus, usuario_id])
 
     res.json({
       message: `Usuário ${novoStatus ? "ativado" : "inativado"} com sucesso`,
@@ -1803,10 +2352,7 @@ router.put("/usuarios/:id/status", verifyToken, async (req, res) => {
   }
 })
 
-// Alterar senha do usuário (apenas DIRETOR pode fazer isso)
 router.put("/usuarios/:id/senha", verifyToken, async (req, res) => {
-  console.log("🔄 Alterando senha do usuário:", req.params.id)
-
   try {
     const db = await connectToDatabase()
     const usuario_id = Number.parseInt(req.params.id)
@@ -1820,36 +2366,40 @@ router.put("/usuarios/:id/senha", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Nova senha deve ter pelo menos 6 caracteres" })
     }
 
-    // Verificar se o usuário logado é DIRETOR
     const [userResult] = await db.query(
       `
-            SELECT c.nome as cargo_nome 
-            FROM usuarios u 
-            JOIN cargos c ON u.cargo_id = c.id 
+            SELECT c.nome as cargo_nome
+            FROM usuarios u
+            JOIN cargos c ON u.cargo_id = c.id
             WHERE u.id = ?
         `,
       [req.userId],
     )
 
-    if (userResult.length === 0 || userResult[0].cargo_nome !== "DIRETOR") {
-      return res.status(403).json({ message: "Acesso negado. Apenas diretores podem alterar senhas." })
+    const cargosPermitidos = ["DIRETOR", "COORDENADOR"]
+    if (userResult.length === 0 || !cargosPermitidos.includes(userResult[0].cargo_nome)) {
+      return res.status(403).json({ message: "Acesso negado. Apenas diretores ou coordenadores podem alterar senhas." })
     }
 
-    // Verificar se o usuário existe
     const [usuarioExiste] = await db.query("SELECT id, nome FROM usuarios WHERE id = ?", [usuario_id])
 
     if (usuarioExiste.length === 0) {
       return res.status(404).json({ message: "Usuário não encontrado" })
     }
 
-    // Criptografar a nova senha
     const saltRounds = 10
     const senhaHash = await bcrypt.hash(novaSenha, saltRounds)
 
-    // Atualizar a senha no banco
-    await db.query("UPDATE usuarios SET senha_hash = ?, updated_at = NOW() WHERE id = ?", [senhaHash, usuario_id])
+    await criarLog({
+      usuario_id: req.userId,
+      tipo_log: "atualizacao",
+      entidade: "usuario",
+      entidade_id: usuario_id,
+      descricao: `Senha do usuário ${usuarioExiste[0].nome} alterada`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
-    console.log(`✅ Senha do usuário ${usuario_id} (${usuarioExiste[0].nome}) alterada com sucesso`)
+    await db.query("UPDATE usuarios SET senha_hash = ?, updated_at = NOW() WHERE id = ?", [senhaHash, usuario_id])
 
     res.json({
       message: "Senha alterada com sucesso",
@@ -1866,16 +2416,15 @@ function isDateInPast(date) {
   const inputDate = new Date(date)
   inputDate.setHours(0, 0, 0, 0)
   today.setHours(0, 0, 0, 0)
-
   return inputDate < today
 }
 
-// Rota para cadastrar beneficios
 router.post("/beneficios", verifyToken, async (req, res) => {
-  let dbtransacao
+  let db
   try {
-    dbtransacao = await connectToDatabase()
-    await dbtransacao.beginTransaction()
+    db = await connectToDatabase()
+    await db.beginTransaction()
+
     const {
       familia_id,
       autorizacao_id,
@@ -1890,16 +2439,15 @@ router.post("/beneficios", verifyToken, async (req, res) => {
 
     const responsavel_id = req.userId
 
-    // Campos obrigatorios
     if (!familia_id || !tipo_beneficio || !justificativa) {
       return res.status(400).json({ message: "Campos obrigatórios não preenchidos." })
     }
 
     if (autorizacao_id) {
-      const [autorizacao] = await dbtransacao.query(
-        `SELECT * FROM autorizacoes_beneficios 
-                 WHERE id = ? AND familia_id = ? AND status = 'ativa' 
-                 AND data_validade >= CURDATE() AND quantidade_utilizada < quantidade`,
+      const [autorizacao] = await db.query(
+        `SELECT * FROM autorizacoes_beneficios
+         WHERE id = ? AND familia_id = ? AND status = 'ativa'
+         AND data_validade >= CURDATE() AND quantidade_utilizada < quantidade`,
         [autorizacao_id, familia_id],
       )
 
@@ -1909,7 +2457,6 @@ router.post("/beneficios", verifyToken, async (req, res) => {
         })
       }
 
-      // Verificar se o tipo de benefício corresponde
       if (autorizacao[0].tipo_beneficio !== tipo_beneficio) {
         return res.status(400).json({
           message: "Tipo de benefício não corresponde à autorização.",
@@ -1918,35 +2465,35 @@ router.post("/beneficios", verifyToken, async (req, res) => {
     }
 
     if (!force) {
-      const [existingBenefits] = await dbtransacao.query(
-        `SELECT b.id, b.tipo_beneficio, p_resp.nome_completo AS responsavel_familia_nome
-                 FROM beneficios b
-                 LEFT JOIN familias f ON b.familia_id = f.id
-                 LEFT JOIN pessoas p_resp ON f.id = p_resp.familia_id AND p_resp.tipo_membro = 'responsavel'
-                 WHERE
-                     b.familia_id = ? AND
-                     MONTH(b.data_entrega) = MONTH(CURDATE()) AND
-                     YEAR(b.data_entrega) = YEAR(CURDATE())
-                 LIMIT 1`,
+      const [existingBenefits] = await db.query(
+        `SELECT b.id, b.tipo_beneficio, p.nome_completo AS responsavel_familia_nome, f.prontuario
+         FROM beneficios b
+         LEFT JOIN familias f ON b.familia_id = f.id
+         LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+         WHERE
+             b.familia_id = ? AND
+             MONTH(b.data_entrega) = MONTH(CURDATE()) AND
+             YEAR(b.data_entrega) = YEAR(CURDATE())
+         LIMIT 1`,
         [familia_id],
       )
 
       if (existingBenefits.length > 0) {
-        const { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente } = existingBenefits[0]
+        const { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente, prontuario } = existingBenefits[0]
         return res.status(409).json({
-          message: `ATENÇÃO: A família de ${responsavel_familia_nome || "um responsável"} já recebeu um benefício do tipo "${tipoBeneficioExistente}" este mês. Deseja registrar a entrega mesmo assim?`,
+          message: `ATENÇÃO: A família de ${responsavel_familia_nome || "um responsável"} (Prontuário: ${prontuario || "N/A"}) já recebeu um benefício do tipo "${tipoBeneficioExistente}" este mês. Deseja registrar a entrega mesmo assim?`,
           requiresConfirmation: true,
-          existingBenefit: { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente },
+          existingBenefit: { responsavel_familia_nome, tipo_beneficio: tipoBeneficioExistente, prontuario },
         })
       }
     }
 
     const sqlQuery = `
-            INSERT INTO beneficios (
-                familia_id, autorizacao_id, tipo_beneficio, descricao_beneficio, valor,
-                justificativa, responsavel_id, status, data_entrega, observacoes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
+        INSERT INTO beneficios (
+            familia_id, autorizacao_id, tipo_beneficio, descricao_beneficio, valor,
+            justificativa, responsavel_id, status, data_entrega, observacoes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
     const params = [
       familia_id,
       autorizacao_id || null,
@@ -1960,52 +2507,59 @@ router.post("/beneficios", verifyToken, async (req, res) => {
       observacoes || "",
     ]
 
-    const [result] = await dbtransacao.query(sqlQuery, params)
+    const [result] = await db.query(sqlQuery, params)
 
     if (autorizacao_id) {
-      await dbtransacao.query(
-        `UPDATE autorizacoes_beneficios 
-                 SET quantidade_utilizada = quantidade_utilizada + 1,
-                     updated_at = NOW()
-                 WHERE id = ?`,
+      await db.query(
+        `UPDATE autorizacoes_beneficios
+         SET quantidade_utilizada = quantidade_utilizada + 1,
+             updated_at = NOW()
+         WHERE id = ?`,
         [autorizacao_id],
       )
 
-      // Verificar se deve marcar como utilizada
-      await dbtransacao.query(
-        `UPDATE autorizacoes_beneficios 
-                 SET status = 'utilizada'
-                 WHERE id = ? AND quantidade_utilizada >= quantidade`,
+      await db.query(
+        `UPDATE autorizacoes_beneficios
+         SET status = 'utilizada'
+         WHERE id = ? AND quantidade_utilizada >= quantidade`,
         [autorizacao_id],
       )
     }
 
-    await dbtransacao.commit()
+    await db.commit()
     const beneficio_id = result.insertId
 
-    const [beneficioInserido] = await dbtransacao.query(
+    const [beneficioInserido] = await db.query(
       `
-            SELECT b.*, u.nome as responsavel_id, f.prontuario, p.nome_completo as responsavel_nome
-            FROM beneficios b
-            LEFT JOIN familias f ON b.familia_id = f.id
-            LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
-            LEFT JOIN usuarios u ON b.responsavel_id = u.id
-            WHERE b.id = ?
-        `,
+        SELECT b.*, u.nome as responsavel_nome_str, f.prontuario, p.nome_completo as responsavel_nome
+        FROM beneficios b
+        LEFT JOIN familias f ON b.familia_id = f.id
+        LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+        LEFT JOIN usuarios u ON b.responsavel_id = u.id
+        WHERE b.id = ?
+    `,
       [beneficio_id],
     )
 
+    await criarLog({
+      usuario_id: responsavel_id,
+      tipo_log: "entrega",
+      entidade: "beneficio",
+      entidade_id: beneficio_id,
+      descricao: `Benefício "${tipo_beneficio}" registrado para a família ID ${beneficioInserido[0]?.familia_id} (Prontuário: ${beneficioInserido[0]?.prontuario || "N/A"}). Entregue por ${beneficioInserido[0]?.responsavel_nome_str || "N/A"}.`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
+
     return res.status(201).json(beneficioInserido[0])
   } catch (err) {
-    if (dbtransacao) {
-      await dbtransacao.rollback()
+    if (db) {
+      await db.rollback()
     }
     console.error("Erro ao registrar benefício:", err)
     return res.status(500).json({ message: err.sqlMessage || err.message || "Erro interno do servidor" })
   }
 })
 
-// Rota para buscar o HISTÓRICO de Benefícios
 router.get("/beneficios/historico", async (req, res) => {
   try {
     const db = await connectToDatabase()
@@ -2031,14 +2585,9 @@ router.get("/beneficios/historico", async (req, res) => {
   }
 })
 
-// Atualizar rota de histórico completo
 router.get("/beneficios/historico-completo", async (req, res) => {
-  console.log("📋 Rota GET /beneficios/historico-completo chamada")
-
   try {
     const db = await connectToDatabase()
-
-    console.log("🔍 Buscando histórico completo...")
 
     const [results] = await db.query(`
                 SELECT
@@ -2063,8 +2612,6 @@ router.get("/beneficios/historico-completo", async (req, res) => {
                 LIMIT 50
             `)
 
-    console.log("✅ Histórico completo encontrado:", results.length, "benefícios")
-
     res.json(results)
   } catch (error) {
     console.error("❌ Erro ao buscar histórico completo:", error)
@@ -2075,7 +2622,6 @@ router.get("/beneficios/historico-completo", async (req, res) => {
   }
 })
 
-// Rota para Marcar Beneficio como entregue
 router.put("/beneficios/:id/entregar", async (req, res) => {
   try {
     const { id } = req.params
@@ -2086,6 +2632,12 @@ router.put("/beneficios/:id/entregar", async (req, res) => {
 
     const db = await connectToDatabase()
 
+    const [beneficioAntes] = await db.query("SELECT * FROM beneficios WHERE id = ?", [id])
+
+    if (beneficioAntes.length === 0) {
+      return res.status(404).json({ message: "Benefício não encontrado com o ID fornecido." })
+    }
+
     const [result] = await db.query(
       "UPDATE beneficios SET status = 'entregue', data_entrega = CURDATE() WHERE id = ?",
       [id],
@@ -2094,6 +2646,22 @@ router.put("/beneficios/:id/entregar", async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Benefício não encontrado com o ID fornecido." })
     }
+
+    const logId = await criarLog({
+      usuario_id: req.userId || 1, // Assuming req.userId is available from verifyToken middleware
+      tipo_log: "entrega", // Changed from 'atualizacao' to 'entrega' for specificity
+      entidade: "beneficio",
+      entidade_id: id,
+      descricao: `Benefício entregue - ${beneficioAntes[0].tipo_beneficio}`, // More descriptive log message
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
+
+    await criarLogAlteracao({
+      log_id: logId,
+      campo: "status",
+      valor_antigo: beneficioAntes[0].status,
+      valor_novo: "entregue",
+    })
 
     return res.status(200).json({ message: "Benefício marcado como entregue com sucesso!" })
   } catch (err) {
@@ -2104,10 +2672,7 @@ router.put("/beneficios/:id/entregar", async (req, res) => {
   }
 })
 
-// Rota para criar autorização de benefício (apenas técnicos e coordenadores)
 router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, res) => {
-  console.log("📝 Criando autorização de benefício para família:", req.params.id)
-
   const db = await connectToDatabase()
 
   try {
@@ -2119,7 +2684,6 @@ router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, re
       return res.status(400).json({ message: "ID da família inválido" })
     }
 
-    // Validações
     if (!tipo_beneficio) {
       return res.status(400).json({ message: "Tipo de benefício é obrigatório" })
     }
@@ -2133,7 +2697,6 @@ router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, re
       return res.status(400).json({ message: "Validade deve ser maior que zero" })
     }
 
-    // Verificar se o usuário é técnico (cargo_id = 3) ou coordenador (cargo_id = 2)
     const [userResult] = await db.query("SELECT cargo_id FROM usuarios WHERE id = ?", [usuario_id])
 
     if (userResult.length === 0 || (userResult[0].cargo_id !== 3 && userResult[0].cargo_id !== 2)) {
@@ -2142,14 +2705,12 @@ router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, re
       })
     }
 
-    // Verificar se a família existe
     const [familiaResult] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
 
     if (familiaResult.length === 0) {
       return res.status(404).json({ message: "Família não encontrada" })
     }
 
-    // Inserir a autorização
     const data_autorizacao = new Date().toISOString().split("T")[0]
     const data_validade = new Date()
     data_validade.setMonth(data_validade.getMonth() + validade_meses)
@@ -2158,8 +2719,8 @@ router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, re
     const [result] = await db.query(
       `
             INSERT INTO autorizacoes_beneficios (
-                familia_id, 
-                tipo_beneficio, 
+                familia_id,
+                tipo_beneficio,
                 quantidade,
                 validade_meses,
                 data_autorizacao,
@@ -2183,7 +2744,15 @@ router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, re
       ],
     )
 
-    console.log("✅ Autorização criada com ID:", result.insertId)
+    // Log benefit authorization creation
+    await criarLog({
+      usuario_id: usuario_id,
+      tipo_log: "criacao",
+      entidade: "autorizacoes_beneficios",
+      entidade_id: result.insertId,
+      descricao: `Autorização de benefício "${tipo_beneficio}" criada para família ID ${familia_id}. Quantidade: ${quantidade}, Validade: ${validade_meses} meses.`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
     res.status(201).json({
       message: "Benefício autorizado com sucesso",
@@ -2198,10 +2767,7 @@ router.post("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, re
   }
 })
 
-// Rota para buscar autorizações de uma família
 router.get("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, res) => {
-  console.log("🔍 Buscando autorizações da família:", req.params.id)
-
   const db = await connectToDatabase()
 
   try {
@@ -2211,10 +2777,9 @@ router.get("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, res
       return res.status(400).json({ message: "ID da família inválido" })
     }
 
-    // Buscar todas as autorizações da família
     const [autorizacoes] = await db.query(
       `
-            SELECT 
+            SELECT
                 a.*,
                 u.nome as autorizador_nome,
                 c.nome as autorizador_cargo
@@ -2227,16 +2792,13 @@ router.get("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, res
       [familia_id],
     )
 
-    // Atualizar status de autorizações expiradas
     for (const autorizacao of autorizacoes) {
-      // Verifica se a data de validade é anterior à data atual e o status é 'ativa'
       if (autorizacao.status === "ativa" && new Date(autorizacao.data_validade) < new Date()) {
         await db.query("UPDATE autorizacoes_beneficios SET status = 'expirada' WHERE id = ?", [autorizacao.id])
         autorizacao.status = "expirada"
       }
     }
 
-    console.log(`✅ ${autorizacoes.length} autorizações encontradas`)
     res.json(autorizacoes)
   } catch (error) {
     console.error("❌ Erro ao buscar autorizações:", error)
@@ -2247,10 +2809,7 @@ router.get("/familias/:id/autorizacoes-beneficios", verifyToken, async (req, res
   }
 })
 
-// Rota para buscar autorizações DISPONÍVEIS de uma família (para uso na tela de benefícios)
 router.get("/familias/:id/autorizacoes-beneficios/disponiveis", verifyToken, async (req, res) => {
-  console.log("🔍 Buscando autorizações disponíveis da família:", req.params.id)
-
   const db = await connectToDatabase()
 
   try {
@@ -2260,10 +2819,9 @@ router.get("/familias/:id/autorizacoes-beneficios/disponiveis", verifyToken, asy
       return res.status(400).json({ message: "ID da família inválido" })
     }
 
-    // Buscar apenas autorizações ativas e válidas
     const [autorizacoes] = await db.query(
       `
-            SELECT 
+            SELECT
                 a.*,
                 u.nome as autorizador_nome,
                 c.nome as autorizador_cargo,
@@ -2280,7 +2838,6 @@ router.get("/familias/:id/autorizacoes-beneficios/disponiveis", verifyToken, asy
       [familia_id],
     )
 
-    console.log(`✅ ${autorizacoes.length} autorizações disponíveis encontradas`)
     res.json(autorizacoes)
   } catch (error) {
     console.error("❌ Erro ao buscar autorizações disponíveis:", error)
@@ -2291,9 +2848,122 @@ router.get("/familias/:id/autorizacoes-beneficios/disponiveis", verifyToken, asy
   }
 })
 
-router.get("/beneficios/historico/familia/:familia_id", verifyToken, async (req, res) => {
-  console.log("📋 Rota GET /beneficios/historico/familia/:familia_id chamada")
+router.get(
+  "/familias/:id/autorizacoes-beneficios/:autorizacaoId/beneficios-concedidos",
+  verifyToken,
+  async (req, res) => {
+    const db = await connectToDatabase()
 
+    try {
+      const familia_id = Number.parseInt(req.params.id)
+      const autorizacao_id = Number.parseInt(req.params.autorizacaoId)
+
+      if (isNaN(familia_id) || isNaN(autorizacao_id)) {
+        return res.status(400).json({ message: "ID inválido" })
+      }
+
+      const [beneficios] = await db.query(
+        `
+            SELECT
+                b.id,
+                b.tipo_beneficio,
+                b.descricao_beneficio,
+                b.valor,
+                b.data_entrega,
+                b.observacoes,
+                u.nome as responsavel_entrega
+            FROM beneficios b
+            INNER JOIN usuarios u ON b.responsavel_id = u.id
+            WHERE b.autorizacao_id = ?
+            AND b.familia_id = ?
+            AND b.status = 'entregue'
+            ORDER BY b.data_entrega DESC
+        `,
+        [autorizacao_id, familia_id],
+      )
+
+      res.json(beneficios)
+    } catch (error) {
+      console.error("❌ Erro ao buscar benefícios concedidos:", error)
+      res.status(500).json({
+        message: "Erro ao buscar benefícios concedidos",
+        error: error.message,
+      })
+    }
+  },
+)
+
+router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/cancelar", verifyToken, async (req, res) => {
+  const db = await connectToDatabase()
+
+  try {
+    const familia_id = Number.parseInt(req.params.id)
+    const autorizacao_id = Number.parseInt(req.params.autorizacaoId)
+    const usuario_id = req.userId
+    const { motivo_cancelamento, observacoes_cancelamento } = req.body
+
+    if (isNaN(familia_id) || isNaN(autorizacao_id)) {
+      return res.status(400).json({ message: "ID inválido" })
+    }
+
+    if (!motivo_cancelamento || motivo_cancelamento.trim() === "") {
+      return res.status(400).json({ message: "Motivo do cancelamento é obrigatório" })
+    }
+
+    const [autorizacao] = await db.query(`SELECT * FROM autorizacoes_beneficios WHERE id = ? AND familia_id = ?`, [
+      autorizacao_id,
+      familia_id,
+    ])
+
+    if (autorizacao.length === 0) {
+      return res.status(404).json({ message: "Autorização não encontrada" })
+    }
+
+    if (autorizacao[0].status !== "ativa") {
+      return res.status(400).json({
+        message: "Apenas autorizações ativas podem ser canceladas. O status atual é: " + autorizacao[0].status,
+      })
+    }
+
+    // Log authorization cancellation
+    await criarLog({
+      usuario_id: usuario_id,
+      tipo_log: "atualizacao",
+      entidade: "autorizacoes_beneficios",
+      entidade_id: autorizacao_id,
+      descricao: `Autorização de benefício cancelada. Motivo: ${motivo_cancelamento}. Anteriormente: Tipo ${autorizacao[0].tipo_beneficio}, Qtd ${autorizacao[0].quantidade}, Validade ${autorizacao[0].validade_meses} meses.`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
+
+    await db.query(
+      `
+            UPDATE autorizacoes_beneficios
+            SET
+                status = 'cancelada',
+                motivo_cancelamento = ?,
+                observacoes_cancelamento = ?,
+                cancelado_por = ?,
+                data_cancelamento = NOW(),
+                updated_at = NOW()
+            WHERE id = ?
+        `,
+      [motivo_cancelamento, observacoes_cancelamento || "", usuario_id, autorizacao_id],
+    )
+
+    res.json({
+      message: "Autorização cancelada com sucesso",
+      autorizacao_id: autorizacao_id,
+    })
+  } catch (error) {
+    console.error("❌ Erro ao cancelar autorização:", error)
+    res.status(500).json({
+      message: "Erro ao cancelar autorização",
+      error: error.message,
+    })
+  }
+})
+
+router.get("/beneficios/historico/familia/:familia_id", verifyToken, async (req, res) => {
   try {
     const db = await connectToDatabase()
     const familia_id = Number.parseInt(req.params.familia_id)
@@ -2301,8 +2971,6 @@ router.get("/beneficios/historico/familia/:familia_id", verifyToken, async (req,
     if (isNaN(familia_id)) {
       return res.status(400).json({ message: "ID da família inválido" })
     }
-
-    console.log(`🔍 Buscando histórico da família ${familia_id}...`)
 
     const [results] = await db.query(
       `
@@ -2330,8 +2998,6 @@ router.get("/beneficios/historico/familia/:familia_id", verifyToken, async (req,
       [familia_id],
     )
 
-    console.log(`✅ Histórico da família encontrado: ${results.length} benefícios`)
-
     res.json(results)
   } catch (error) {
     console.error("❌ Erro ao buscar histórico da família:", error)
@@ -2342,14 +3008,7 @@ router.get("/beneficios/historico/familia/:familia_id", verifyToken, async (req,
   }
 })
 
-// ============================================
-// ROTAS DE LOCAIS DE ENCAMINHAMENTO
-// ============================================
-
-// Listar todos os locais de encaminhamento
 router.get("/locais-encaminhamento", verifyToken, async (req, res) => {
-  console.log("📋 Listando locais de encaminhamento")
-
   const db = await connectToDatabase()
 
   try {
@@ -2361,7 +3020,6 @@ router.get("/locais-encaminhamento", verifyToken, async (req, res) => {
         `,
     )
 
-    console.log(`✅ ${locais.length} locais encontrados`)
     res.json(locais)
   } catch (error) {
     console.error("❌ Erro ao buscar locais de encaminhamento:", error)
@@ -2372,10 +3030,7 @@ router.get("/locais-encaminhamento", verifyToken, async (req, res) => {
   }
 })
 
-// Criar novo local de encaminhamento
 router.post("/locais-encaminhamento", verifyToken, async (req, res) => {
-  console.log("[v0] 📝 Criando novo local de encaminhamento")
-
   const db = await connectToDatabase()
 
   try {
@@ -2385,7 +3040,6 @@ router.post("/locais-encaminhamento", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Nome do local é obrigatório" })
     }
 
-    // Verificar se o usuário é técnico (cargo_id = 3) ou coordenador (cargo_id = 2)
     const [userResult] = await db.query("SELECT cargo_id FROM usuarios WHERE id = ?", [req.userId])
 
     if (userResult.length === 0 || (userResult[0].cargo_id !== 3 && userResult[0].cargo_id !== 2)) {
@@ -2394,23 +3048,29 @@ router.post("/locais-encaminhamento", verifyToken, async (req, res) => {
       })
     }
 
-    // Verificar se já existe um local com esse nome
     const [localExistente] = await db.query("SELECT id FROM local_encaminhamento WHERE nome = ?", [nome.trim()])
 
     if (localExistente.length > 0) {
       return res.status(400).json({ message: "Já existe um local com esse nome" })
     }
 
-    // Inserir o novo local
     const [result] = await db.query(
       `
-            INSERT INTO local_encaminhamento (nome) 
+            INSERT INTO local_encaminhamento (nome)
             VALUES (?)
         `,
       [nome.trim()],
     )
 
-    console.log("[v0] ✅ Local criado com ID:", result.insertId)
+    // Log new referral location creation
+    await criarLog({
+      usuario_id: req.userId,
+      tipo_log: "criacao",
+      entidade: "local_encaminhamento",
+      entidade_id: result.insertId,
+      descricao: `Local de encaminhamento "${nome.trim()}" cadastrado`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
     res.status(201).json({
       message: "Local de encaminhamento cadastrado com sucesso",
@@ -2418,7 +3078,7 @@ router.post("/locais-encaminhamento", verifyToken, async (req, res) => {
       nome: nome.trim(),
     })
   } catch (error) {
-    console.error("[v0] ❌ Erro ao criar local de encaminhamento:", error)
+    console.error("❌ Erro ao criar local de encaminhamento:", error)
     res.status(500).json({
       message: "Erro ao cadastrar local de encaminhamento",
       error: error.message,
@@ -2426,14 +3086,7 @@ router.post("/locais-encaminhamento", verifyToken, async (req, res) => {
   }
 })
 
-// ============================================
-// ROTAS DE ENCAMINHAMENTOS
-// ============================================
-
-// Buscar encaminhamentos de uma família
 router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
-  console.log("🔍 Buscando encaminhamentos da família:", req.params.id)
-
   const db = await connectToDatabase()
 
   try {
@@ -2451,7 +3104,7 @@ router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
     }
 
     const cargo_id = userResult[0].cargo_id
-    const podeVisualizar = cargo_id === 1 || cargo_id === 2 || cargo_id === 3 // Diretor, Coordenador ou Técnico
+    const podeVisualizar = cargo_id === 1 || cargo_id === 2 || cargo_id === 3
 
     if (!podeVisualizar) {
       return res.status(403).json({
@@ -2459,10 +3112,9 @@ router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
       })
     }
 
-    // Buscar encaminhamentos com informações do local e responsável
     const [encaminhamentos] = await db.query(
       `
-            SELECT 
+            SELECT
                 e.id,
                 e.familia_id,
                 e.evolucao_id,
@@ -2479,7 +3131,6 @@ router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
       [familia_id],
     )
 
-    console.log(`✅ ${encaminhamentos.length} encaminhamentos encontrados`)
     res.json(encaminhamentos)
   } catch (error) {
     console.error("❌ Erro ao buscar encaminhamentos:", error)
@@ -2490,112 +3141,518 @@ router.get("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
   }
 })
 
-// Criar encaminhamentos vinculados a uma evolução
-router.post("/familias/:id/encaminhamentos", verifyToken, async (req, res) => {
-  console.log("📝 Criando encaminhamentos para família:", req.params.id)
-  console.log("[v0] Dados recebidos:", req.body)
-
+router.put("/familias/:id/autorizacoes-beneficios/:autorizacaoId/editar", verifyToken, async (req, res) => {
   const db = await connectToDatabase()
 
   try {
     const familia_id = Number.parseInt(req.params.id)
+    const autorizacao_id = Number.parseInt(req.params.autorizacaoId)
     const usuario_id = req.userId
-    const { evolucao_id, locais_ids } = req.body
+    const { tipo_beneficio, quantidade, validade_meses, justificativa, observacoes, motivo_edicao } = req.body
 
-    console.log("[v0] familia_id:", familia_id)
-    console.log("[v0] usuario_id:", usuario_id)
-    console.log("[v0] evolucao_id:", evolucao_id)
-    console.log("[v0] locais_ids:", locais_ids)
-
-    if (isNaN(familia_id)) {
-      return res.status(400).json({ message: "ID da família inválido" })
+    if (isNaN(familia_id) || isNaN(autorizacao_id)) {
+      return res.status(400).json({ message: "ID inválido" })
     }
 
-    const [userResult] = await db.query("SELECT cargo_id FROM usuarios WHERE id = ?", [usuario_id])
-
-    if (userResult.length === 0) {
-      return res.status(403).json({ message: "Usuário não encontrado" })
+    if (!tipo_beneficio || !quantidade || !validade_meses || !justificativa || !motivo_edicao) {
+      return res.status(400).json({ message: "Todos os campos obrigatórios devem ser preenchidos" })
     }
 
-    const cargo_id = userResult[0].cargo_id
-    const podeCadastrar = cargo_id === 2 || cargo_id === 3 // Coordenador ou Técnico
+    if (quantidade < 1) {
+      return res.status(400).json({ message: "Quantidade deve ser maior que zero" })
+    }
 
-    if (!podeCadastrar) {
-      return res.status(403).json({
-        message: "Apenas técnicos e coordenadores podem registrar encaminhamentos",
+    if (validade_meses < 1) {
+      return res.status(400).json({ message: "Validade deve ser maior que zero" })
+    }
+
+    const [autorizacao] = await db.query(`SELECT * FROM autorizacoes_beneficios WHERE id = ? AND familia_id = ?`, [
+      autorizacao_id,
+      familia_id,
+    ])
+
+    if (autorizacao.length === 0) {
+      return res.status(404).json({ message: "Autorização não encontrada" })
+    }
+
+    if (autorizacao[0].status !== "ativa") {
+      return res.status(400).json({
+        message: "Somente autorizações ativas podem ser editadas",
       })
     }
 
-    if (!locais_ids || !Array.isArray(locais_ids) || locais_ids.length === 0) {
-      return res.status(400).json({ message: "Selecione pelo menos um local de encaminhamento" })
+    if (quantidade < autorizacao[0].quantidade_utilizada) {
+      return res.status(400).json({
+        message: `A quantidade não pode ser menor que a quantidade já utilizada (${autorizacao[0].quantidade_utilizada})`,
+      })
     }
 
-    // Verificar se a família existe
-    const [familiaResult] = await db.query("SELECT id FROM familias WHERE id = ?", [familia_id])
+    const data_autorizacao = new Date(autorizacao[0].data_autorizacao)
+    const nova_data_validade = new Date(data_autorizacao)
+    nova_data_validade.setMonth(nova_data_validade.getMonth() + validade_meses)
 
-    if (familiaResult.length === 0) {
-      return res.status(404).json({ message: "Família não encontrada" })
-    }
+    await db.query(
+      `
+      UPDATE autorizacoes_beneficios
+      SET
+        tipo_beneficio = ?,
+        quantidade = ?,
+        validade_meses = ?,
+        data_validade = ?,
+        justificativa = ?,
+        observacoes = ?,
+        updated_at = NOW()
+      WHERE id = ?
+      `,
+      [
+        tipo_beneficio,
+        quantidade,
+        validade_meses,
+        nova_data_validade,
+        justificativa,
+        observacoes || "",
+        autorizacao_id,
+      ],
+    )
 
-    console.log("[v0] Família encontrada")
+    // Log authorization edit
+    await criarLog({
+      usuario_id: usuario_id,
+      tipo_log: "atualizacao",
+      entidade: "autorizacoes_beneficios",
+      entidade_id: autorizacao_id,
+      descricao: `Autorização de benefício editada. Motivo: ${motivo_edicao}. Novo tipo: ${tipo_beneficio}, Nova Qtd: ${quantidade}, Nova Validade: ${validade_meses} meses.`,
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
 
-    // Verificar se a evolução existe (se foi fornecida)
-    if (evolucao_id) {
-      const [evolucaoResult] = await db.query("SELECT id FROM evolucoes WHERE id = ? AND familia_id = ?", [
-        evolucao_id,
-        familia_id,
-      ])
+    const [autorizacaoAtualizada] = await db.query(
+      `
+      SELECT
+        ab.*,
+        u.nome as autorizador_nome,
+        c.nome as autorizador_cargo
+      FROM autorizacoes_beneficios ab
+      LEFT JOIN usuarios u ON ab.autorizador_id = u.id
+      LEFT JOIN cargos c ON u.cargo_id = c.id
+      WHERE ab.id = ?
+      `,
+      [autorizacao_id],
+    )
 
-      if (evolucaoResult.length === 0) {
-        return res.status(404).json({ message: "Evolução não encontrada" })
-      }
-      console.log("[v0] Evolução encontrada:", evolucao_id)
-    }
-
-    const data_encaminhamento = new Date().toISOString().split("T")[0]
-
-    // Inserir os encaminhamentos
-    const encaminhamentosInseridos = []
-
-    for (const local_id of locais_ids) {
-      console.log("[v0] Inserindo encaminhamento para local:", local_id)
-
-      const [localResult] = await db.query("SELECT id FROM local_encaminhamento WHERE id = ?", [local_id])
-
-      if (localResult.length === 0) {
-        console.warn(`⚠️ Local de encaminhamento ${local_id} não encontrado, pulando...`)
-        continue
-      }
-
-      const [result] = await db.query(
-        `
-                INSERT INTO encaminhamentos (
-                    familia_id,
-                    evolucao_id,
-                    local_encaminhamento_id,
-                    data_encaminhamento,
-                    responsavel_id
-                ) VALUES (?, ?, ?, ?, ?)
-            `,
-        [familia_id, evolucao_id || null, local_id, data_encaminhamento, usuario_id],
-      )
-
-      encaminhamentosInseridos.push(result.insertId)
-      console.log(`✅ Encaminhamento criado com ID: ${result.insertId}`)
-    }
-
-    console.log("✅ Todos os encaminhamentos criados:", encaminhamentosInseridos)
-
-    res.status(201).json({
-      message: "Encaminhamentos registrados com sucesso",
-      ids: encaminhamentosInseridos,
+    res.json({
+      message: "Autorização editada com sucesso",
+      autorizacao: autorizacaoAtualizada[0],
+      dados_anteriores: autorizacao[0],
     })
   } catch (error) {
-    console.error("❌ Erro ao criar encaminhamentos:", error)
+    console.error("❌ Erro ao editar autorização:", error)
     res.status(500).json({
-      message: "Erro ao registrar encaminhamentos",
+      message: "Erro ao editar autorização",
       error: error.message,
     })
+  }
+})
+
+router.put("/autorizacoes-beneficios/:id", verifyToken, async (req, res) => {
+  let db
+  try {
+    db = await connectToDatabase()
+    const autorizacao_id = Number.parseInt(req.params.id)
+    const usuario_id = req.userId
+
+    const { tipo_beneficio, quantidade, validade_meses, justificativa, observacoes, motivo_edicao } = req.body
+
+    if (!tipo_beneficio || !quantidade || !validade_meses || !justificativa || !motivo_edicao) {
+      return res.status(400).json({
+        message:
+          "Campos obrigatórios não preenchidos (tipo_beneficio, quantidade, validade_meses, justificativa, motivo_edicao).",
+      })
+    }
+
+    if (quantidade < 1) {
+      return res.status(400).json({ message: "Quantidade deve ser no mínimo 1." })
+    }
+
+    if (validade_meses < 1) {
+      return res.status(400).json({ message: "Validade deve ser no mínimo 1 mês." })
+    }
+
+    const [autorizacaoAtual] = await db.query(
+      `SELECT * FROM autorizacoes_beneficios WHERE id = ? AND status = 'ativa'`,
+      [autorizacao_id],
+    )
+
+    if (autorizacaoAtual.length === 0) {
+      return res.status(404).json({ message: "Autorização não encontrada ou não está ativa." })
+    }
+
+    const autorizacao = autorizacaoAtual[0]
+
+    const data_autorizacao = new Date(autorizacao.data_autorizacao)
+    const nova_data_validade = new Date(data_autorizacao)
+    nova_data_validade.setMonth(nova_data_validade.getMonth() + Number.parseInt(validade_meses))
+    const nova_data_validade_str = nova_data_validade.toISOString().split("T")[0]
+
+    await db.query("START TRANSACTION")
+
+    try {
+      await db.query(
+        `INSERT INTO edicoes_beneficios (
+          autorizacao_id, familia_id, editado_por,
+          tipo_beneficio_anterior, quantidade_anterior, validade_meses_anterior,
+          data_validade_anterior, justificativa_anterior, observacoes_anterior,
+          tipo_beneficio_novo, quantidade_nova, validade_meses_nova,
+          data_validade_nova, justificativa_novo, observacoes_novo,
+          motivo_edicao, data_edicao
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          autorizacao_id,
+          autorizacao.familia_id,
+          usuario_id,
+          autorizacao.tipo_beneficio,
+          autorizacao.quantidade,
+          autorizacao.validade_meses,
+          autorizacao.data_validade,
+          autorizacao.justificativa,
+          autorizacao.observacoes,
+          tipo_beneficio,
+          quantidade,
+          validade_meses,
+          nova_data_validade_str,
+          justificativa,
+          observacoes,
+          motivo_edicao,
+        ],
+      )
+
+      await db.query(
+        `UPDATE autorizacoes_beneficios
+         SET tipo_beneficio = ?, quantidade = ?, validade_meses = ?,
+             data_validade = ?, justificativa = ?, observacoes = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [
+          tipo_beneficio,
+          quantidade,
+          validade_meses,
+          nova_data_validade_str,
+          justificativa,
+          observacoes,
+          autorizacao_id,
+        ],
+      )
+
+      await db.query(
+        `INSERT INTO evolucoes (familia_id, usuario_id, data_evolucao, hora_evolucao, descricao)
+         VALUES (?, ?, CURDATE(), CURTIME(), ?)`,
+        [
+          autorizacao.familia_id,
+          usuario_id,
+          `Autorização de benefício editada. Tipo: ${tipo_beneficio}, Quantidade: ${quantidade}, Validade: ${validade_meses} meses. Motivo: ${motivo_edicao}`,
+        ],
+      )
+
+      // Log authorization edit
+      await criarLog({
+        usuario_id: usuario_id,
+        tipo_log: "atualizacao",
+        entidade: "autorizacoes_beneficios",
+        entidade_id: autorizacao_id,
+        descricao: `Autorização de benefício editada. Motivo: ${motivo_edicao}. Novo tipo: ${tipo_beneficio}, Nova Qtd: ${quantidade}, Nova Validade: ${validade_meses} meses.`,
+        ip_address: req.ip || req.connection.remoteAddress,
+      })
+
+      await db.query("COMMIT")
+
+      res.status(200).json({
+        message: "Autorização editada com sucesso!",
+        autorizacao_id: autorizacao_id,
+      })
+    } catch (error) {
+      await db.query("ROLLBACK")
+      throw error
+    }
+  } catch (error) {
+    console.error("❌ Erro ao editar autorização:", error)
+    res.status(500).json({
+      message: "Erro ao editar autorização",
+      error: error.message,
+    })
+  }
+})
+
+// ==================== ROTAS DE LOGS  ====================
+
+// Listar logs com filtros
+router.get("/logs", verifyToken, async (req, res) => {
+  try {
+    const db = await connectToDatabase()
+
+    const {
+      tipo_log,
+      entidade,
+      usuario_id,
+      data_inicio,
+      data_fim,
+      limite: limiteQuery,
+      offset: offsetQuery,
+    } = req.query
+
+    const limite = Number.parseInt(limiteQuery) || 100
+    const offset = Number.parseInt(offsetQuery) || 0
+
+    // Validar que são números válidos
+    if (isNaN(limite) || isNaN(offset) || limite < 1 || offset < 0) {
+      return res.status(400).json({
+        error: "Parâmetros de paginação inválidos",
+      })
+    }
+
+    let query = `
+      SELECT
+        ls.id,
+        ls.tipo_log,
+        ls.entidade,
+        ls.entidade_id,
+        ls.descricao,
+        ls.ip_address,
+        ls.created_at,
+        u.nome as usuario_nome,
+        u.cpf as usuario_cpf,
+        c.nome as cargo_nome,
+        e.nome as equipamento_nome,
+        f.prontuario as familia_prontuario,
+        p.nome_completo as familia_responsavel
+      FROM logs_sistema ls
+      INNER JOIN usuarios u ON ls.usuario_id = u.id
+      INNER JOIN cargos c ON u.cargo_id = c.id
+      INNER JOIN equipamento e ON u.equipamento_id = e.id
+      LEFT JOIN familias f ON ls.entidade = 'familia' AND ls.entidade_id = f.id
+      LEFT JOIN pessoas p ON f.id = p.familia_id AND p.tipo_membro = 'responsavel'
+      WHERE 1=1
+    `
+
+    const params = []
+
+    if (tipo_log) {
+      query += ` AND ls.tipo_log = ?`
+      params.push(tipo_log)
+    }
+
+    if (entidade) {
+      query += ` AND ls.entidade = ?`
+      params.push(entidade)
+    }
+
+    if (usuario_id) {
+      query += ` AND ls.usuario_id = ?`
+      params.push(Number.parseInt(usuario_id))
+    }
+
+    if (data_inicio) {
+      query += ` AND DATE(ls.created_at) >= ?`
+      params.push(data_inicio)
+    }
+
+    if (data_fim) {
+      query += ` AND DATE(ls.created_at) <= ?`
+      params.push(data_fim)
+    }
+
+    query += ` ORDER BY ls.created_at DESC LIMIT ? OFFSET ?`
+    params.push(limite)
+    params.push(offset)
+
+    const [logs] = await db.query(query, params)
+
+    // Buscar contagem total
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM logs_sistema ls
+      WHERE 1=1
+    `
+
+    const countParams = []
+
+    if (tipo_log) {
+      countQuery += ` AND ls.tipo_log = ?`
+      countParams.push(tipo_log)
+    }
+
+    if (entidade) {
+      countQuery += ` AND ls.entidade = ?`
+      countParams.push(entidade)
+    }
+
+    if (usuario_id) {
+      countQuery += ` AND ls.usuario_id = ?`
+      countParams.push(Number.parseInt(usuario_id))
+    }
+
+    if (data_inicio) {
+      countQuery += ` AND DATE(ls.created_at) >= ?`
+      countParams.push(data_inicio)
+    }
+
+    if (data_fim) {
+      countQuery += ` AND DATE(ls.created_at) <= ?`
+      countParams.push(data_fim)
+    }
+
+    const [countResult] = await db.query(countQuery, countParams)
+
+    res.json({
+      logs,
+      total: countResult[0].total,
+      limite,
+      offset,
+    })
+  } catch (error) {
+    console.error("Erro ao buscar logs:", error)
+    res.status(500).json({
+      message: "Erro ao buscar logs",
+      error: error.message,
+    })
+  }
+})
+
+// Listar usuários para filtro
+router.get("/logs/usuarios/lista", verifyToken, async (req, res) => {
+  try {
+    const db = await connectToDatabase()
+
+    const [usuarios] = await db.query(`
+      SELECT DISTINCT
+        u.id,
+        u.nome,
+        u.cpf
+      FROM usuarios u
+      INNER JOIN logs_sistema ls ON u.id = ls.usuario_id
+      ORDER BY u.nome
+    `)
+
+    res.json(usuarios)
+  } catch (error) {
+    console.error("Erro ao buscar usuários:", error)
+    res.status(500).json({
+      message: "Erro ao buscar usuários",
+      error: error.message,
+    })
+  }
+})
+
+// Buscar detalhes de um log específico
+router.get("/logs/:id", verifyToken, async (req, res) => {
+  try {
+    const db = await connectToDatabase()
+
+    const { id } = req.params
+
+    const [logs] = await db.query(
+      `
+      SELECT
+        ls.*,
+        u.nome as usuario_nome,
+        u.cpf as usuario_cpf,
+        c.nome as cargo_nome,
+        e.nome as equipamento_nome
+      FROM logs_sistema ls
+      INNER JOIN usuarios u ON ls.usuario_id = u.id
+      INNER JOIN cargos c ON u.cargo_id = c.id
+      INNER JOIN equipamento e ON u.equipamento_id = e.id
+      WHERE ls.id = ?
+    `,
+      [id],
+    )
+
+    if (logs.length === 0) {
+      return res.status(404).json({ message: "Log não encontrado" })
+    }
+
+    // Buscar alterações relacionadas
+    const [alteracoes] = await db.query(
+      `
+      SELECT * FROM logs_alteracoes
+      WHERE log_id = ?
+      ORDER BY id
+    `,
+      [id],
+    )
+
+    res.json({
+      log: logs[0],
+      alteracoes,
+    })
+  } catch (error) {
+    console.error("Erro ao buscar detalhes do log:", error)
+    res.status(500).json({
+      message: "Erro ao buscar detalhes do log",
+      error: error.message,
+    })
+  }
+})
+
+// Funções auxiliares para criar logs
+async function criarLog(dados) {
+  const { usuario_id, tipo_log, entidade, entidade_id, descricao, ip_address } = dados
+
+  console.log("[v0] criarLog chamado com dados:", dados)
+
+  try {
+    const db = await connectToDatabase()
+    console.log("[v0] Conexão com banco estabelecida")
+
+    const [result] = await db.query(
+      `INSERT INTO logs_sistema
+       (usuario_id, tipo_log, entidade, entidade_id, descricao, ip_address)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [usuario_id, tipo_log, entidade, entidade_id, descricao, ip_address],
+    )
+
+    console.log("[v0] Log inserido com sucesso, ID:", result.insertId)
+    return result.insertId
+  } catch (error) {
+    console.error("[v0] Erro ao criar log:", error)
+    console.error("[v0] Detalhes do erro:", error.message)
+    console.error("[v0] SQL State:", error.sqlState)
+    console.error("[v0] SQL Message:", error.sqlMessage)
+    return null
+  }
+}
+
+async function criarLogAlteracao(dados) {
+  const { log_id, campo, valor_antigo, valor_novo } = dados
+
+  try {
+    const db = await connectToDatabase()
+    await db.query(
+      `INSERT INTO logs_alteracoes
+       (log_id, campo, valor_antigo, valor_novo)
+       VALUES (?, ?, ?, ?)`,
+      [log_id, campo, valor_antigo, valor_novo],
+    )
+  } catch (error) {
+    console.error("Erro ao criar log de alteração:", error)
+  }
+}
+
+router.post("/logout", verifyToken, async (req, res) => {
+  try {
+    console.log("[v0] Logout chamado para usuário:", req.userId)
+
+    await criarLog({
+      usuario_id: req.userId,
+      tipo_log: "logout",
+      entidade: "usuario",
+      entidade_id: req.userId,
+      descricao: "Usuário saiu do sistema",
+      ip_address: req.ip || req.connection.remoteAddress,
+    })
+
+    res.json({ message: "Logout registrado com sucesso" })
+  } catch (error) {
+    console.error("Erro ao registrar logout:", error)
+    res.status(500).json({ message: "Erro ao registrar logout" })
   }
 })
 

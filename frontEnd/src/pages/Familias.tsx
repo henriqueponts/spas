@@ -3,9 +3,14 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, Filter, Plus, Users, MapPin, Phone, DollarSign, Calendar, FileText, Heart } from "lucide-react"
+import { Search, Filter, Plus, Users, MapPin, Phone, DollarSign, Calendar, FileText } from "lucide-react"
 import api from "../services/api"
 import Header from "../components/Header"
+
+interface Equipamento {
+  id: number
+  nome: string
+}
 
 interface Responsavel {
   nome_completo: string
@@ -21,9 +26,11 @@ interface Endereco {
   uf: string
 }
 
+// ALTERADO: Adicionado o campo `cpf` à interface do Integrante
 interface Integrante {
   nome_completo: string
   tipo_membro: string
+  cpf: string // <-- CPF do integrante agora está aqui
 }
 
 interface TrabalhoRenda {
@@ -35,13 +42,12 @@ interface Familia {
   prontuario: string
   data_cadastro: string
   data_atendimento: string
-  situacao: string
   equipamento_nome: string
   equipamento_regiao: string
   profissional_nome: string
   responsavel: Responsavel
   endereco: Endereco
-  integrantes: Integrante[]
+  integrantes: Integrante[] // <-- Agora cada integrante terá um CPF
   trabalho_renda: TrabalhoRenda
 }
 
@@ -52,57 +58,72 @@ const Familias: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
-  const [filtroSituacao, setFiltroSituacao] = useState("todos")
+  const [equipamentos, setEquipamentos] = useState<Equipamento[]>([])
+  const [filtroEquipamento, setFiltroEquipamento] = useState("todos")
 
   useEffect(() => {
-    carregarFamilias()
+    carregarDados()
   }, [])
 
   useEffect(() => {
     filtrarFamilias()
-  }, [searchTerm, filtroSituacao, familias])
+  }, [searchTerm, filtroEquipamento, familias])
 
-  const carregarFamilias = async () => {
+  const carregarDados = async () => {
     try {
       setLoading(true)
       setError("")
-
-      console.log("Buscando famílias...")
-      const response = await api.get("/auth/familias")
-
-      console.log("Resposta:", response.data)
-      setFamilias(response.data)
-      setFamiliasFiltradas(response.data)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const [familiasResponse, equipamentosResponse] = await Promise.all([
+        api.get("/auth/familias"),
+        api.get("/auth/equipamentos"),
+      ])
+      setFamilias(familiasResponse.data)
+      setEquipamentos(equipamentosResponse.data)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error("Erro ao carregar famílias:", err)
-      setError("Não foi possível carregar as famílias. Verifique se o servidor está rodando.")
+      console.error("Erro ao carregar dados iniciais:", err)
+      setError("Não foi possível carregar os dados. Verifique se o servidor está rodando.")
     } finally {
       setLoading(false)
     }
   }
 
+  // ALTERADO: A lógica de filtro agora também busca nos integrantes
   const filtrarFamilias = () => {
     let filtradas = familias
 
-    // Filtro por situação
-    if (filtroSituacao !== "todos") {
-      filtradas = filtradas.filter((familia) => familia.situacao === filtroSituacao)
+    // Filtro por equipamento
+    if (filtroEquipamento !== "todos") {
+      filtradas = filtradas.filter((familia) => familia.equipamento_nome === filtroEquipamento)
     }
 
     // Filtro por termo de busca
     if (searchTerm) {
       const termo = searchTerm.toLowerCase()
-      filtradas = filtradas.filter((familia) => {
-        const cpfLimpo = familia.responsavel.cpf.replace(/[.-]/g, "")
-        const termoLimpo = searchTerm.replace(/[.-]/g, "")
+      const termoLimpo = searchTerm.replace(/[.-]/g, "") // Para buscar por CPF sem formatação
 
-        return (
+      filtradas = filtradas.filter((familia) => {
+        // Verifica o responsável e os dados gerais da família
+        const responsavelMatch =
           familia.prontuario.toLowerCase().includes(termo) ||
           familia.responsavel.nome_completo.toLowerCase().includes(termo) ||
-          cpfLimpo.includes(termoLimpo) ||
+          familia.responsavel.cpf.replace(/[.-]/g, "").includes(termoLimpo) ||
           familia.endereco.bairro.toLowerCase().includes(termo)
+
+        // Se encontrou no responsável, já retorna true
+        if (responsavelMatch) {
+          return true
+        }
+
+        // Se não, verifica se algum integrante corresponde à busca
+        const integranteMatch = familia.integrantes.some(
+          (integrante) =>
+            integrante.nome_completo.toLowerCase().includes(termo) ||
+            // Garante que o CPF do integrante existe antes de tentar buscar
+            (integrante.cpf && integrante.cpf.replace(/[.-]/g, "").includes(termoLimpo)),
         )
+
+        return integranteMatch
       })
     }
 
@@ -118,12 +139,6 @@ const Familias: React.FC = () => {
       return "Endereço não informado"
     }
     return `${endereco.logradouro}, ${endereco.numero} - ${endereco.bairro}`
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const formatarCPF = (cpf: string) => {
-    if (!cpf || cpf === "Não informado") return cpf
-    return cpf
   }
 
   const formatarTelefone = (telefone: string) => {
@@ -142,13 +157,12 @@ const Familias: React.FC = () => {
     return new Date(data).toLocaleDateString("pt-BR")
   }
 
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center bg-white p-8 rounded-2xl shadow-lg">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Carregando famílias...</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Carregando dados...</h3>
           <p className="text-gray-600">Aguarde um momento</p>
         </div>
       </div>
@@ -160,12 +174,12 @@ const Familias: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center">
         <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Heart className="w-8 h-8 text-red-500" />
+            {/* Ícone de erro pode ser adicionado aqui */}
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Ops! Algo deu errado</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
-            onClick={carregarFamilias}
+            onClick={carregarDados}
             className="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition-colors font-medium"
           >
             Tentar Novamente
@@ -175,7 +189,7 @@ const Familias: React.FC = () => {
     )
   }
 
-  return (                                                                                                                                                                                                                                                                                                            
+  return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <Header />
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -205,7 +219,7 @@ const Familias: React.FC = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por prontuário, CPF, nome ou bairro..."
+                placeholder="Buscar por prontuário, nome, CPF (responsável ou integrante) ou bairro..."
                 className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
               />
             </div>
@@ -213,13 +227,16 @@ const Familias: React.FC = () => {
               <div className="relative">
                 <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <select
-                  value={filtroSituacao}
-                  onChange={(e) => setFiltroSituacao(e.target.value)}
+                  value={filtroEquipamento}
+                  onChange={(e) => setFiltroEquipamento(e.target.value)}
                   className="pl-10 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:bg-white transition-all duration-200 appearance-none cursor-pointer"
                 >
-                  <option value="todos">Todas</option>
-                  <option value="ativo">Ativas</option>
-                  <option value="inativo">Inativas</option>
+                  <option value="todos">Todos os Equipamentos</option>
+                  {equipamentos.map((equipamento) => (
+                    <option key={equipamento.id} value={equipamento.nome}>
+                      {equipamento.nome}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -233,16 +250,16 @@ const Familias: React.FC = () => {
               <Users className="w-12 h-12 text-gray-400" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              {searchTerm || filtroSituacao !== "todos" ? "Nenhuma família encontrada" : "Nenhuma família cadastrada"}
+              {searchTerm || filtroEquipamento !== "todos" ? "Nenhuma família encontrada" : "Nenhuma família cadastrada"}
             </h2>
             <p className="text-gray-600 mb-6">
-              {searchTerm || filtroSituacao !== "todos"
+              {searchTerm || filtroEquipamento !== "todos"
                 ? "Tente ajustar os filtros de busca"
                 : "Comece cadastrando uma nova família"}
             </p>
-            {!searchTerm && filtroSituacao === "todos" && (
+            {!searchTerm && filtroEquipamento === "todos" && (
               <button
-                onClick={() => navigate("/familias/novo")}
+                onClick={() => navigate("/familias/cadastro")}
                 className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors font-medium"
               >
                 Cadastrar Primeira Família
@@ -266,13 +283,6 @@ const Familias: React.FC = () => {
                       </h3>
                       <p className="text-gray-500 text-sm">Prontuário: {familia.prontuario}</p>
                     </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        familia.situacao === "ativo" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {familia.situacao === "ativo" ? "Ativa" : "Inativa"}
-                    </span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600">
                     <div className="flex items-center gap-1">

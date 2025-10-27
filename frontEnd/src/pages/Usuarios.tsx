@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import { useAlert } from "../components/ui/alert-container"
 
 // Interfaces (mantidas como estão)
 interface Usuario {
@@ -49,9 +50,13 @@ const Usuarios: React.FC = () => {
   const [novaSenha, setNovaSenha] = useState("")
   const [mostrarNovaSenha, setMostrarNovaSenha] = useState(false)
   const [erroSenha, setErroSenha] = useState<string>("")
+  const { showErro, showSucesso } = useAlert()
 
   // Lógica de permissão mais robusta com useMemo
-  const hasPermission = useMemo(() => user?.cargo_nome === "DIRETOR", [user])
+  const hasPermission = useMemo(() =>
+    user?.cargo_nome === "DIRETOR" || user?.cargo_nome === "COORDENADOR",
+    [user]
+  );
 
   const validarSenha = (senha: string): string => {
     if (senha.length < 6) return "A senha deve ter no mínimo 6 caracteres"
@@ -111,7 +116,7 @@ const Usuarios: React.FC = () => {
 
   const alternarStatusUsuario = async (usuarioId: string) => {
     if (String(user?.id) === usuarioId && usuarios.find((u) => u.id === usuarioId)?.ativo) {
-      alert("Você não pode inativar seu próprio usuário!")
+      showErro("Você não pode inativar seu próprio usuário!")
       return
     }
 
@@ -120,7 +125,7 @@ const Usuarios: React.FC = () => {
       setUsuarios(usuarios.map((u) => (u.id === usuarioId ? { ...u, ativo: !u.ativo } : u)))
     } catch (error) {
       console.error("Erro ao alterar status:", error)
-      alert("Erro ao alterar status do usuário")
+      showErro("Não foi possível alterar o status do usuário.")
     }
   }
 
@@ -154,23 +159,22 @@ const Usuarios: React.FC = () => {
       setUsuarioSelecionado(null)
       setNovaSenha("")
       setErroSenha("")
-      alert("Senha alterada com sucesso!")
+      showSucesso("Senha alterada com sucesso!")
     } catch (error: unknown) {
       console.error("Erro ao trocar senha:", error)
-      if (
-        error &&
-        typeof error === "object" &&
-        "response" in error &&
-        error.response &&
-        typeof error.response === "object" &&
-        "data" in error.response &&
-        error.response.data &&
-        typeof error.response.data === "object" &&
-        "message" in error.response.data
-      ) {
-        alert(error.response.data.message)
+      // extrai a mensagem de erro de forma segura (axios-like) e garante que seja string
+      const extractedMessage = (() => {
+        if (typeof error === "object" && error !== null && "response" in error) {
+          const errWithResponse = error as { response?: { data?: { message?: unknown } } }
+          const msg = errWithResponse.response?.data?.message
+          return typeof msg === "string" ? msg : undefined
+        }
+        return undefined
+      })()
+      if (typeof extractedMessage === "string" && extractedMessage.trim() !== "") {
+        showErro(extractedMessage)
       } else {
-        alert("Erro ao alterar senha")
+        showErro("Erro ao alterar senha")
       }
     }
   }
@@ -258,7 +262,7 @@ const Usuarios: React.FC = () => {
                 <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Buscar por nome, CPF, email ou cargo..."
+                  placeholder="Buscar por nome, CPF ou cargo..."
                   value={termoBusca}
                   onChange={(e) => setTermoBusca(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -354,13 +358,12 @@ const Usuarios: React.FC = () => {
                     <button
                       onClick={() => alternarStatusUsuario(usuario.id)}
                       disabled={String(user?.id) === usuario.id && usuario.ativo}
-                      className={`flex items-center space-x-1 px-3 py-2 text-sm rounded-lg transition-colors border ${
-                        String(user?.id) === String(usuario.id) && usuario.ativo
+                      className={`flex items-center space-x-1 px-3 py-2 text-sm rounded-lg transition-colors border ${String(user?.id) === String(usuario.id) && usuario.ativo
                           ? "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed"
                           : usuario.ativo
                             ? "bg-red-50 text-red-700 hover:bg-red-100 border-red-200 hover:border-red-300"
                             : "bg-green-50 text-green-700 hover:bg-green-100 border-green-200 hover:border-green-300"
-                      }`}
+                        }`}
                     >
                       {usuario.ativo ? <UserX size={16} /> : <UserCheck size={16} />}
                       <span>{usuario.ativo ? "Inativar" : "Ativar"}</span>

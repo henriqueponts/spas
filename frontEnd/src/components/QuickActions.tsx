@@ -3,7 +3,7 @@
 import type React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
-import { UserPlus, Search, ClipboardList, UserCog } from "lucide-react"
+import { UserPlus, Search, ClipboardList, UserCog, FileText} from "lucide-react"
 
 interface QuickAction {
   id: string
@@ -47,11 +47,20 @@ const QuickActions: React.FC = () => {
     {
       id: "user-management",
       title: "Gestão de Usuários",
-      description: "Criar/Alterar/Inativar usuários do sistema",
+      description: "Criar/Inativar/Alterar Senha de usuários do sistema",
       icon: <UserCog size={24} />,
       color: "orange",
       onClick: () => navigate("/usuarios"), // <-- Correto
-      allowedRoles: ["DIRETOR"],
+      allowedRoles: ["DIRETOR", "COORDENADOR"],
+    },
+    {
+      id: "logs",
+      title: "Logs do Sistema",
+      description: "Visualizar histórico de atividades e auditoria",
+      icon: <FileText size={24} />,
+      color: "indigo",
+      onClick: () => navigate("/logs"),
+      allowedRoles: ["DIRETOR", "COORDENADOR"],
     },
   ]
 

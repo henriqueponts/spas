@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/Tabs"
 import { Badge } from "../components/ui/Badge"
 import { Separator } from "../components/ui/Separator"
+import { useAlert } from "../components/ui/alert-container"
 
 // --- ÍCONES (lucide-react) ---
 import {
@@ -31,9 +32,13 @@ import {
   X,
   Building,
   Gift,
+  Ban,
 } from "lucide-react"
 import Header from "../components/Header"
 import { gerarReciboAutorizacao } from "../pages/ReciboAutorizacao"
+// Importando o gerador de recibo de cancelamento
+import { gerarReciboCancelamento } from "../pages/ReciboCancelamento"
+import { gerarReciboEdicao } from "../pages/ReciboEdicao"
 
 // --- INTERFACES DE DADOS (Mantidas) ---
 interface Integrante {
@@ -158,6 +163,9 @@ interface AutorizacaoBeneficio {
   justificativa: string
   observacoes: string
   status: string
+  motivo_cancelamento?: string
+  observacoes_cancelamento?: string
+  quantidade_utilizada?: number // Adicionado para exibir na edição
 }
 
 // --- COMPONENTE DE ITEM DE INFORMAÇÃO (Estilo compatível) ---
@@ -184,6 +192,7 @@ const VisualizarFamilia: React.FC = () => {
   const [novaEvolucao, setNovaEvolucao] = useState("")
   const [mostrarFormEvolucao, setMostrarFormEvolucao] = useState(false)
   const [loadingEvolucao, setLoadingEvolucao] = useState(false)
+  const { showSucesso, showErro, showAviso } = useAlert()
 
   const isTecnico = user?.cargo_id === 3
   const isCoordenador = user?.cargo_id === 2
@@ -208,6 +217,25 @@ const VisualizarFamilia: React.FC = () => {
     validade_meses: 1,
     justificativa: "",
     observacoes: "",
+  })
+
+  // Adicionando estados para a funcionalidade de cancelamento
+  const [mostrarFormCancelamento, setMostrarFormCancelamento] = useState(false)
+  const [autorizacaoParaCancelar, setAutorizacaoParaCancelar] = useState<AutorizacaoBeneficio | null>(null)
+  const [dadosCancelamento, setDadosCancelamento] = useState({
+    motivo: "",
+    observacoes: "",
+  })
+
+  const [mostrarFormEdicao, setMostrarFormEdicao] = useState(false)
+  const [autorizacaoParaEditar, setAutorizacaoParaEditar] = useState<AutorizacaoBeneficio | null>(null)
+  const [dadosEdicao, setDadosEdicao] = useState({
+    tipo_beneficio: "",
+    quantidade: 1,
+    validade_meses: 1,
+    justificativa: "",
+    observacoes: "",
+    motivo_edicao: "",
   })
 
   // --- LÓGICA DE DADOS E FORMATÇÃO (Mantida) ---
@@ -287,7 +315,7 @@ const VisualizarFamilia: React.FC = () => {
 
   const salvarEvolucao = async () => {
     if (!novaEvolucao.trim()) {
-      alert("Por favor, escreva uma descrição para a evolução.")
+      showAviso("Por favor, escreva uma descrição para a evolução.")
       return
     }
     setLoadingEvolucao(true)
@@ -310,10 +338,10 @@ const VisualizarFamilia: React.FC = () => {
       setMostrarFormEvolucao(false)
       await carregarEvolucoes()
       await carregarEncaminhamentos()
-      alert("Evolução registrada com sucesso!")
+      showSucesso("Evolução registrada com sucesso!")
     } catch (error) {
       console.error("Erro ao salvar evolução:", error)
-      alert("Erro ao salvar evolução. Tente novamente.")
+      showErro("Erro ao salvar evolução. Tente novamente.")
     } finally {
       setLoadingEvolucao(false)
     }
@@ -321,12 +349,12 @@ const VisualizarFamilia: React.FC = () => {
 
   const adicionarEncaminhamento = () => {
     if (localSelecionado === "") {
-      alert("Por favor, selecione um local de encaminhamento.")
+      showAviso("Por favor, selecione um local de encaminhamento.")
       return
     }
 
     if (encaminhamentosSelecionados.includes(Number(localSelecionado))) {
-      alert("Este local já foi adicionado.")
+      showAviso("Este local já foi adicionado.")
       return
     }
 
@@ -345,7 +373,7 @@ const VisualizarFamilia: React.FC = () => {
 
   const cadastrarNovoLocal = async () => {
     if (!nomeNovoLocal.trim()) {
-      alert("Por favor, informe o nome do local.")
+      showAviso("Por favor, informe o nome do local.")
       return
     }
 
@@ -355,10 +383,10 @@ const VisualizarFamilia: React.FC = () => {
       setNomeNovoLocal("")
       setMostrarFormNovoLocal(false)
       await carregarLocaisEncaminhamento()
-      alert("Local cadastrado com sucesso!")
+      showSucesso("Local cadastrado com sucesso!")
     } catch (error: any) {
       console.error("Erro ao cadastrar local:", error)
-      alert(error.response?.data?.message || "Erro ao cadastrar local. Tente novamente.")
+      showErro(error.response?.data?.message || "Erro ao cadastrar local. Tente novamente.")
     } finally {
       setLoadingNovoLocal(false)
     }
@@ -366,11 +394,11 @@ const VisualizarFamilia: React.FC = () => {
 
   const autorizarBeneficio = async () => {
     if (!dadosAutorizacao.tipo_beneficio) {
-      alert("Por favor, selecione o tipo de benefício.")
+      showAviso("Por favor, selecione o tipo de benefício.")
       return
     }
     if (!dadosAutorizacao.justificativa.trim()) {
-      alert("Por favor, informe a justificativa.")
+      showAviso("Por favor, informe a justificativa.")
       return
     }
 
@@ -388,7 +416,7 @@ const VisualizarFamilia: React.FC = () => {
       })
       setMostrarFormAutorizacao(false)
       await carregarAutorizacoes()
-      alert("Benefício autorizado com sucesso!")
+      showSucesso("Benefício autorizado com sucesso!")
 
       if (familia && user) {
         gerarReciboAutorizacao({
@@ -417,7 +445,187 @@ const VisualizarFamilia: React.FC = () => {
       }
     } catch (error) {
       console.error("Erro ao autorizar benefício:", error)
-      alert("Erro ao autorizar benefício. Tente novamente.")
+      showErro("Erro ao autorizar benefício. Tente novamente.")
+    } finally {
+      setLoadingEvolucao(false)
+    }
+  }
+
+  // Função para cancelar benefício
+  const cancelarBeneficio = async () => {
+    if (!autorizacaoParaCancelar) return
+
+    if (!dadosCancelamento.motivo.trim()) {
+      showAviso("Por favor, informe o motivo do cancelamento.")
+      return
+    }
+
+    setLoadingEvolucao(true)
+    try {
+      await api.put(`/auth/familias/${id}/autorizacoes-beneficios/${autorizacaoParaCancelar.id}/cancelar`, {
+        motivo_cancelamento: dadosCancelamento.motivo,
+        observacoes_cancelamento: dadosCancelamento.observacoes,
+      })
+
+      let beneficiosConcedidos: any[] = []
+      try {
+        const responseBeneficios = await api.get(
+          `/auth/familias/${id}/autorizacoes-beneficios/${autorizacaoParaCancelar.id}/beneficios-concedidos`,
+        )
+        beneficiosConcedidos = responseBeneficios.data
+      } catch (error) {
+        console.log("Nenhum benefício concedido encontrado para esta autorização")
+      }
+
+      await carregarAutorizacoes()
+      showSucesso("Benefício cancelado com sucesso!")
+
+      // Gerar recibo de cancelamento
+      if (familia && user) {
+        gerarReciboCancelamento({
+          familia: {
+            prontuario: familia.prontuario,
+            responsavel_nome: familia.responsavel.nome_completo,
+            responsavel_cpf: familia.responsavel.cpf,
+            endereco: `${familia.endereco.logradouro}, ${familia.endereco.numero || "S/N"}${familia.endereco.complemento ? ` - ${familia.endereco.complemento}` : ""} - ${familia.endereco.bairro}`,
+            cidade: familia.endereco.cidade,
+            uf: familia.endereco.uf,
+          },
+          beneficio: {
+            tipo_beneficio: autorizacaoParaCancelar.tipo_beneficio,
+            quantidade: autorizacaoParaCancelar.quantidade,
+            data_autorizacao: autorizacaoParaCancelar.data_autorizacao,
+            autorizador_nome: autorizacaoParaCancelar.autorizador_nome,
+          },
+          beneficiosConcedidos: beneficiosConcedidos,
+          cancelamento: {
+            data_cancelamento: new Date().toISOString(),
+            motivo: dadosCancelamento.motivo,
+            observacoes: dadosCancelamento.observacoes || undefined,
+            responsavel_cancelamento: user.nome,
+            cargo_responsavel: user.cargo_nome ?? "",
+          },
+        })
+      }
+
+      // Resetar formulário
+      setMostrarFormCancelamento(false)
+      setAutorizacaoParaCancelar(null)
+      setDadosCancelamento({
+        motivo: "",
+        observacoes: "",
+      })
+    } catch (error) {
+      console.error("Erro ao cancelar benefício:", error)
+      showErro("Erro ao cancelar benefício. Tente novamente.")
+    } finally {
+      setLoadingEvolucao(false)
+    }
+  }
+
+  // Função para abrir o formulário de cancelamento
+  const abrirFormCancelamento = (autorizacao: AutorizacaoBeneficio) => {
+    setAutorizacaoParaCancelar(autorizacao)
+    setMostrarFormCancelamento(true)
+  }
+
+  const abrirFormEdicao = (autorizacao: AutorizacaoBeneficio) => {
+    setAutorizacaoParaEditar(autorizacao)
+    setDadosEdicao({
+      tipo_beneficio: autorizacao.tipo_beneficio,
+      quantidade: autorizacao.quantidade,
+      validade_meses: autorizacao.validade_meses,
+      justificativa: autorizacao.justificativa,
+      observacoes: autorizacao.observacoes || "",
+      motivo_edicao: "",
+    })
+    setMostrarFormEdicao(true)
+  }
+
+  const editarBeneficio = async () => {
+    if (!autorizacaoParaEditar) return
+
+    if (!dadosEdicao.tipo_beneficio || !dadosEdicao.justificativa.trim() || !dadosEdicao.motivo_edicao.trim()) {
+      showAviso("Por favor, preencha todos os campos obrigatórios.")
+      return
+    }
+
+    if (dadosEdicao.quantidade < 1) {
+      showAviso("A quantidade deve ser maior que zero.")
+      return
+    }
+
+    if (dadosEdicao.validade_meses < 1) {
+      showAviso("A validade deve ser maior que zero.")
+      return
+    }
+
+    setLoadingEvolucao(true)
+    try {
+      const response = await api.put(
+        `/auth/familias/${id}/autorizacoes-beneficios/${autorizacaoParaEditar.id}/editar`,
+        dadosEdicao,
+      )
+
+      await carregarAutorizacoes()
+      showSucesso("Benefício editado com sucesso!")
+
+      // Gerar recibo de edição
+      if (familia && user && response.data) {
+        const { autorizacao: autorizacaoAtualizada, dados_anteriores } = response.data
+
+        // Calcular nova data de validade
+        const dataAutorizacao = new Date(autorizacaoAtualizada.data_autorizacao)
+        const novaDataValidade = new Date(dataAutorizacao)
+        novaDataValidade.setMonth(novaDataValidade.getMonth() + dadosEdicao.validade_meses)
+
+        gerarReciboEdicao({
+          familia: {
+            prontuario: familia.prontuario,
+            responsavel_nome: familia.responsavel.nome_completo,
+            responsavel_cpf: familia.responsavel.cpf,
+            endereco: `${familia.endereco.logradouro}, ${familia.endereco.numero || "S/N"}${familia.endereco.complemento ? ` - ${familia.endereco.complemento}` : ""} - ${familia.endereco.bairro}`,
+            cidade: familia.endereco.cidade,
+            uf: familia.endereco.uf,
+          },
+          autorizacao_anterior: {
+            tipo_beneficio: dados_anteriores.tipo_beneficio,
+            quantidade: dados_anteriores.quantidade,
+            validade_meses: dados_anteriores.validade_meses,
+            justificativa: dados_anteriores.justificativa,
+            observacoes: dados_anteriores.observacoes,
+          },
+          autorizacao_nova: {
+            tipo_beneficio: dadosEdicao.tipo_beneficio,
+            quantidade: dadosEdicao.quantidade,
+            validade_meses: dadosEdicao.validade_meses,
+            data_validade: novaDataValidade.toISOString(),
+            justificativa: dadosEdicao.justificativa,
+            observacoes: dadosEdicao.observacoes,
+          },
+          edicao: {
+            data_edicao: new Date().toISOString(),
+            motivo_edicao: dadosEdicao.motivo_edicao,
+            responsavel_edicao: user.nome,
+            cargo_responsavel: user.cargo_nome ?? "",
+          },
+        })
+      }
+
+      // Resetar formulário
+      setMostrarFormEdicao(false)
+      setAutorizacaoParaEditar(null)
+      setDadosEdicao({
+        tipo_beneficio: "",
+        quantidade: 1,
+        validade_meses: 1,
+        justificativa: "",
+        observacoes: "",
+        motivo_edicao: "",
+      })
+    } catch (error: any) {
+      console.error("Erro ao editar benefício:", error)
+      showErro(error.response?.data?.message || "Erro ao editar benefício. Tente novamente.")
     } finally {
       setLoadingEvolucao(false)
     }
@@ -637,17 +845,6 @@ const VisualizarFamilia: React.FC = () => {
                 <InfoItem label="Data de Cadastro" value={formatarData(familia.data_cadastro)} />
                 <InfoItem label="Último Atendimento" value={formatarData(familia.data_atendimento)} />
                 <InfoItem label="Prontuário" value={familia.prontuario} />
-                <InfoItem label="Situação">
-                  <Badge
-                    className={
-                      familia.situacao.toLowerCase() === "ativo"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }
-                  >
-                    {familia.situacao}
-                  </Badge>
-                </InfoItem>
               </dl>
             </CardContent>
           </Card>
@@ -920,6 +1117,8 @@ const VisualizarFamilia: React.FC = () => {
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                         <div>
                           <h3 className="font-medium text-gray-900">{integrante.nome_completo}</h3>
+                          {/* LINHA ADICIONADA ABAIXO */}
+                          <p className="text-sm text-gray-600">CPF: {integrante.cpf || "Não informado"}</p>
                           <p className="text-sm text-gray-600">
                             {calcularIdade(integrante.data_nascimento)} anos - Renda:{" "}
                             {formatarMoeda(integrante.renda_mensal)}
@@ -975,7 +1174,7 @@ const VisualizarFamilia: React.FC = () => {
                       <span>
                         {formatarMoeda(
                           garantirNumero(familia.trabalho_renda.rendimento_total) +
-                            familia.programas_sociais.reduce((t, p) => t + garantirNumero(p.valor), 0),
+                          familia.programas_sociais.reduce((t, p) => t + garantirNumero(p.valor), 0),
                         )}
                       </span>
                     </div>
@@ -1131,6 +1330,220 @@ const VisualizarFamilia: React.FC = () => {
 
                 <Separator />
 
+                {mostrarFormEdicao && autorizacaoParaEditar && (
+                  <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-blue-900 flex items-center">
+                        <Pencil className="h-5 w-5 mr-2" />
+                        Editar Benefício: {formatarTipoBeneficio(autorizacaoParaEditar.tipo_beneficio)}
+                      </h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setMostrarFormEdicao(false)
+                          setAutorizacaoParaEditar(null)
+                          setDadosEdicao({
+                            tipo_beneficio: "",
+                            quantidade: 1,
+                            validade_meses: 1,
+                            justificativa: "",
+                            observacoes: "",
+                            motivo_edicao: "",
+                          })
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Benefício *</label>
+                          <select
+                            value={dadosEdicao.tipo_beneficio}
+                            onChange={(e) => setDadosEdicao({ ...dadosEdicao, tipo_beneficio: e.target.value })}
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          >
+                            <option value="">Selecione...</option>
+                            <option value="cesta_basica">Cesta Básica</option>
+                            <option value="auxilio_funeral">Auxílio Funeral</option>
+                            <option value="auxilio_natalidade">Auxílio Natalidade</option>
+                            <option value="passagem">Passagem</option>
+                            <option value="outro">Outro</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade *</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={dadosEdicao.quantidade}
+                            onChange={(e) =>
+                              setDadosEdicao({
+                                ...dadosEdicao,
+                                quantidade: Number.parseInt(e.target.value) || 1,
+                              })
+                            }
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Quantidade já utilizada: {autorizacaoParaEditar.quantidade_utilizada || 0}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Validade (meses) *</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={dadosEdicao.validade_meses}
+                            onChange={(e) =>
+                              setDadosEdicao({
+                                ...dadosEdicao,
+                                validade_meses: Number.parseInt(e.target.value) || 1,
+                              })
+                            }
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Justificativa *</label>
+                          <textarea
+                            value={dadosEdicao.justificativa}
+                            onChange={(e) => setDadosEdicao({ ...dadosEdicao, justificativa: e.target.value })}
+                            placeholder="Descreva o motivo da autorização do benefício..."
+                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            rows={3}
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                          <textarea
+                            value={dadosEdicao.observacoes}
+                            onChange={(e) => setDadosEdicao({ ...dadosEdicao, observacoes: e.target.value })}
+                            placeholder="Observações adicionais (opcional)..."
+                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            rows={2}
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Motivo da Edição *</label>
+                          <textarea
+                            value={dadosEdicao.motivo_edicao}
+                            onChange={(e) => setDadosEdicao({ ...dadosEdicao, motivo_edicao: e.target.value })}
+                            placeholder="Explique por que esta autorização está sendo editada..."
+                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            rows={3}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setMostrarFormEdicao(false)
+                            setAutorizacaoParaEditar(null)
+                            setDadosEdicao({
+                              tipo_beneficio: "",
+                              quantidade: 1,
+                              validade_meses: 1,
+                              justificativa: "",
+                              observacoes: "",
+                              motivo_edicao: "",
+                            })
+                          }}
+                          disabled={loadingEvolucao}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          onClick={editarBeneficio}
+                          disabled={loadingEvolucao}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {loadingEvolucao ? "Salvando..." : "Salvar Alterações"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal de formulário de cancelamento */}
+                {mostrarFormCancelamento && autorizacaoParaCancelar && (
+                  <div className="p-4 bg-red-50 rounded-lg border-2 border-red-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-red-900 flex items-center">
+                        <Ban className="h-5 w-5 mr-2" />
+                        Cancelar Benefício: {formatarTipoBeneficio(autorizacaoParaCancelar.tipo_beneficio)}
+                      </h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setMostrarFormCancelamento(false)
+                          setAutorizacaoParaCancelar(null)
+                          setDadosCancelamento({
+                            motivo: "",
+                            observacoes: "",
+                          })
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Motivo do Cancelamento *</label>
+                        <textarea
+                          value={dadosCancelamento.motivo}
+                          onChange={(e) => setDadosCancelamento({ ...dadosCancelamento, motivo: e.target.value })}
+                          placeholder="Descreva o motivo do cancelamento do benefício..."
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                          rows={3}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <textarea
+                          value={dadosCancelamento.observacoes}
+                          onChange={(e) => setDadosCancelamento({ ...dadosCancelamento, observacoes: e.target.value })}
+                          placeholder="Observações adicionais sobre o cancelamento (opcional)..."
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                          rows={2}
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setMostrarFormCancelamento(false)
+                            setAutorizacaoParaCancelar(null)
+                            setDadosCancelamento({
+                              motivo: "",
+                              observacoes: "",
+                            })
+                          }}
+                          disabled={loadingEvolucao}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          onClick={cancelarBeneficio}
+                          disabled={loadingEvolucao}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          {loadingEvolucao ? "Cancelando..." : "Confirmar Cancelamento"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {autorizacoes.length > 0 ? (
                   <div className="space-y-4">
                     {autorizacoes.map((autorizacao) => (
@@ -1145,9 +1558,35 @@ const VisualizarFamilia: React.FC = () => {
                               {autorizacao.validade_meses === 1 ? "mês" : "meses"}
                             </p>
                           </div>
-                          <Badge className={getStatusBadgeClass(autorizacao.status)}>
-                            {formatarStatusAutorizacao(autorizacao.status)}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge className={getStatusBadgeClass(autorizacao.status)}>
+                              {formatarStatusAutorizacao(autorizacao.status)}
+                            </Badge>
+                            {podeAutorizar && autorizacao.status === "ativa" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => abrirFormEdicao(autorizacao)}
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              >
+                                <Pencil className="h-4 w-4 mr-1" />
+                                Editar
+                              </Button>
+                            )}
+                            {/* Adicionando botão de cancelamento para autorizações ativas ou utilizadas */}
+                            {podeAutorizar &&
+                              (autorizacao.status === "ativa") && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => abrirFormCancelamento(autorizacao)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Ban className="h-4 w-4 mr-1" />
+                                  Cancelar
+                                </Button>
+                              )}
+                          </div>
                         </div>
                         <div className="text-sm text-gray-700 space-y-1">
                           <p>

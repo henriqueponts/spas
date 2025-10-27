@@ -1,4 +1,4 @@
-interface DadosRecibo {
+interface DadosReciboCancelamento {
   familia: {
     prontuario: string
     responsavel_nome: string
@@ -7,22 +7,29 @@ interface DadosRecibo {
     cidade: string
     uf: string
   }
-  autorizacao: {
+  beneficio: {
     tipo_beneficio: string
     quantidade: number
-    validade_meses: number
     data_autorizacao: string
-    data_validade: string
-    justificativa: string
-    observacoes?: string
+    autorizador_nome: string
   }
-  autorizador: {
-    nome: string
-    cargo: string
+  beneficiosConcedidos?: Array<{
+    id: number
+    tipo_beneficio: string
+    valor: number
+    data_entrega: string
+    responsavel_entrega: string
+  }>
+  cancelamento: {
+    data_cancelamento: string
+    motivo: string
+    observacoes?: string
+    responsavel_cancelamento: string
+    cargo_responsavel: string
   }
 }
 
-export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
+export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
   const formatarTipoBeneficio = (tipo: string) => {
     const tipos: Record<string, string> = {
       cesta_basica: "Cesta Básica",
@@ -38,13 +45,15 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
     return new Date(data).toLocaleDateString("pt-BR", { timeZone: "UTC" })
   }
 
+
+
   const htmlRecibo = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Recibo de Autorização - ${dados.familia.prontuario}</title>
+      <title>Recibo de Cancelamento - ${dados.familia.prontuario}</title>
       <style>
         * {
           margin: 0;
@@ -59,7 +68,6 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         
         body {
           font-family: Arial, sans-serif;
-          /* AJUSTE: Reduzir padding para que o container possa ocupar mais espaço */
           padding: 10px; 
           line-height: 1.4;
           color: #333;
@@ -73,7 +81,6 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
           height: 100%;
           margin: 0 auto;
           border: 2px solid #333;
-          /* AJUSTE: Aumentar padding interno para empurrar o conteúdo */
           padding: 30px; 
           display: flex;
           flex-direction: column;
@@ -98,7 +105,6 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         }
         
         .section {
-          /* AJUSTE: Aumentar margem de fundo para espaçar as seções */
           margin-bottom: 25px; 
         }
         
@@ -126,9 +132,31 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         .info-value {
           flex: 1;
         }
+
+        .beneficios-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 8px;
+          font-size: 12px;
+        }
+
+        .beneficios-table th,
+        .beneficios-table td {
+          border: 1px solid #ddd;
+          padding: 8px;
+          text-align: left;
+        }
+
+        .beneficios-table th {
+          background-color: #f0f0f0;
+          font-weight: bold;
+        }
+
+        .beneficios-table tr:nth-child(even) {
+          background-color: #f9f9f9;
+        }
         
         .signature-section {
-          /* AJUSTE: Aumentar margem superior para afastar do último bloco de dados */
           margin-top: 50px; 
           padding-top: 20px;
           border-top: 1px solid #ccc;
@@ -136,7 +164,6 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         }
         
         .signature-box {
-          /* AJUSTE: Aumentar para mais espaço entre a frase e a linha de assinatura */
           margin-top: 100px; 
           text-align: center;
         }
@@ -178,8 +205,8 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Recibo de Autorização</h1>
-          <p>Autorização de Benefício</p>
+          <h1>Recibo de Cancelamento</h1>
+          <p>Cancelamento de Benefício Autorizado</p>
         </div>
         
         <div class="section">
@@ -207,57 +234,59 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         </div>
         
         <div class="section">
-          <div class="section-title">Dados do Benefício Autorizado</div>
+          <div class="section-title">Dados do Benefício Cancelado</div>
           <div class="info-row">
             <span class="info-label">Tipo de Benefício:</span>
-            <span class="info-value">${formatarTipoBeneficio(dados.autorizacao.tipo_beneficio)}</span>
+            <span class="info-value">${formatarTipoBeneficio(dados.beneficio.tipo_beneficio)}</span>
           </div>
           <div class="info-row">
-            <span class="info-label">Quantidade:</span>
-            <span class="info-value">${dados.autorizacao.quantidade}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Validade:</span>
-            <span class="info-value">${dados.autorizacao.validade_meses} ${dados.autorizacao.validade_meses === 1 ? "mês" : "meses"}</span>
+            <span class="info-label">Quantidade Autorizada:</span>
+            <span class="info-value">${dados.beneficio.quantidade}</span>
           </div>
           <div class="info-row">
             <span class="info-label">Data de Autorização:</span>
-            <span class="info-value">${formatarData(dados.autorizacao.data_autorizacao)}</span>
+            <span class="info-value">${formatarData(dados.beneficio.data_autorizacao)}</span>
           </div>
           <div class="info-row">
-            <span class="info-label">Válido até:</span>
-            <span class="info-value">${formatarData(dados.autorizacao.data_validade)}</span>
+            <span class="info-label">Autorizado por:</span>
+            <span class="info-value">${dados.beneficio.autorizador_nome}</span>
+          </div>
+        </div>
+
+
+        
+        <div class="section">
+          <div class="section-title">Dados do Cancelamento</div>
+          <div class="info-row">
+            <span class="info-label">Data do Cancelamento:</span>
+            <span class="info-value">${formatarData(dados.cancelamento.data_cancelamento)}</span>
           </div>
           <div class="info-row">
-            <span class="info-label">Justificativa:</span>
-            <span class="info-value">${dados.autorizacao.justificativa}</span>
+            <span class="info-label">Responsável:</span>
+            <span class="info-value">${dados.cancelamento.responsavel_cancelamento}</span>
           </div>
-          ${dados.autorizacao.observacoes
+          <div class="info-row">
+            <span class="info-label">Cargo:</span>
+            <span class="info-value">${dados.cancelamento.cargo_responsavel}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Motivo:</span>
+            <span class="info-value">${dados.cancelamento.motivo}</span>
+          </div>
+          ${dados.cancelamento.observacoes
       ? `
           <div class="info-row">
             <span class="info-label">Observações:</span>
-            <span class="info-value">${dados.autorizacao.observacoes}</span>
+            <span class="info-value">${dados.cancelamento.observacoes}</span>
           </div>
           `
       : ""
     }
         </div>
         
-        <div class="section">
-          <div class="section-title">Dados do Autorizador</div>
-          <div class="info-row">
-            <span class="info-label">Nome:</span>
-            <span class="info-value">${dados.autorizador.nome}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Cargo:</span>
-            <span class="info-value">${dados.autorizador.cargo}</span>
-          </div>
-        </div>
-        
         <div class="signature-section">
           <p style="margin-bottom: 15px; text-align: center;">
-            Declaro que recebi a autorização acima descrita e estou ciente das condições estabelecidas.
+            Declaro estar ciente do cancelamento do benefício acima descrito e das razões apresentadas.
           </p>
           
           <div class="signature-box">
@@ -268,7 +297,7 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         </div>
         
         <div class="footer">
-          <p>Este documento comprova a autorização do benefício e deve ser apresentado no momento da retirada.</p>
+          <p>Este documento comprova o cancelamento da autorização do benefício.</p>
           <p>Data de emissão: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}</p>
         </div>
       </div>
@@ -277,12 +306,10 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         let downloadExecuted = false;
         
         window.onload = function() {
-          // Always show print dialog
           setTimeout(function() {
             window.print();
           }, 100);
           
-          // Download only once (first time the window is opened)
           if (!downloadExecuted) {
             downloadExecuted = true;
             setTimeout(function() {
@@ -290,7 +317,7 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = 'Recibo_Autorizacao_${dados.familia.prontuario}_${new Date().toISOString().split("T")[0]}.html';
+              a.download = 'Recibo_Cancelamento_${dados.familia.prontuario}_${new Date().toISOString().split("T")[0]}.html';
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);

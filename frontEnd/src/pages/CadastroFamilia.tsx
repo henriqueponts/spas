@@ -106,9 +106,9 @@ interface DadosFamilia {
   habitacao: {
     qtd_comodos: number
     qtd_dormitorios: number
-    tipo_construcao: string[]
+    tipo_construcao: string // Alterado de string[] para string
     area_conflito: boolean
-    condicao_domicilio: string[]
+    condicao_domicilio: string // Alterado de string[] para string
     energia_eletrica: string
     agua: string
     esgoto: string
@@ -225,9 +225,9 @@ const CadastroFamilia: React.FC = () => {
     habitacao: {
       qtd_comodos: 0,
       qtd_dormitorios: 0,
-      tipo_construcao: [],
+      tipo_construcao: "alvenaria", // Alterado para valor único
       area_conflito: false,
-      condicao_domicilio: [],
+      condicao_domicilio: "propria_quitada", // Alterado para valor único
       energia_eletrica: "propria",
       agua: "propria",
       esgoto: "rede",
@@ -337,6 +337,29 @@ const CadastroFamilia: React.FC = () => {
         } else if (!isDateInPast(responsavel.data_nascimento)) {
           if (!newErrors.responsavel) newErrors.responsavel = {}
           newErrors.responsavel.data_nascimento = "Data de nascimento não pode ser no futuro."
+        } else {
+          // Adiciona a verificação de idade
+          const hoje = new Date()
+          // Adiciona 1 hora para evitar problemas com fuso horário que podem "voltar" o dia
+          const dataNascimento = new Date(responsavel.data_nascimento)
+          dataNascimento.setHours(dataNascimento.getHours() + 1)
+
+          let idade = hoje.getFullYear() - dataNascimento.getFullYear()
+          const m = hoje.getMonth() - dataNascimento.getMonth()
+          if (m < 0 || (m === 0 && hoje.getDate() < dataNascimento.getDate())) {
+            idade--
+          }
+          if (idade < 18) {
+            if (!newErrors.responsavel) newErrors.responsavel = {}
+            newErrors.responsavel.data_nascimento = "O responsável deve ter pelo menos 18 anos."
+          }
+        }
+        if (!responsavel.data_nascimento) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.data_nascimento = "Data de nascimento é obrigatória."
+        } else if (!isDateInPast(responsavel.data_nascimento)) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.data_nascimento = "Data de nascimento não pode ser no futuro."
         }
         if (!responsavel.cpf) {
           if (!newErrors.responsavel) newErrors.responsavel = {}
@@ -421,14 +444,6 @@ const CadastroFamilia: React.FC = () => {
         }
         break
 
-      case 3: // Habitação
-        if (habitacao.qtd_comodos < 0) {
-          newErrors.habitacao = { ...newErrors.habitacao, qtd_comodos: "Valor não pode ser negativo." }
-        }
-        if (habitacao.qtd_dormitorios < 0) {
-          newErrors.habitacao = { ...newErrors.habitacao, qtd_dormitorios: "Valor não pode ser negativo." }
-        }
-        break
 
       case 4: // Trabalho e Renda
         if (trabalho_renda.rendimento_total !== undefined && trabalho_renda.rendimento_total !== null) {
@@ -521,20 +536,14 @@ const CadastroFamilia: React.FC = () => {
     }))
   }
 
-  type HabitacaoFields = "tipo_construcao" | "condicao_domicilio"
-  type SituacaoSocialFields = "servicos_publicos"
-
   const handleCheckboxChange = (
-    section: "habitacao" | "situacao_social",
-    field: HabitacaoFields | SituacaoSocialFields,
+    section: "situacao_social",
+    field: "servicos_publicos",
     value: string,
     checked: boolean,
   ) => {
     setDadosFamilia((prev) => {
-      const currentArray =
-        section === "habitacao"
-          ? prev.habitacao[field as HabitacaoFields]
-          : prev.situacao_social[field as SituacaoSocialFields]
+      const currentArray = prev[section][field]
 
       return {
         ...prev,
@@ -613,23 +622,21 @@ const CadastroFamilia: React.FC = () => {
           return (
             <div key={etapa.id} className="flex items-center">
               <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
-                  isCompleta
-                    ? "bg-green-500 border-green-500 text-white"
-                    : isAtual
-                      ? "bg-blue-500 border-blue-500 text-white"
-                      : isAcessivel
-                        ? "border-gray-300 text-gray-500"
-                        : "border-gray-200 text-gray-300"
-                }`}
+                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${isCompleta
+                  ? "bg-green-500 border-green-500 text-white"
+                  : isAtual
+                    ? "bg-blue-500 border-blue-500 text-white"
+                    : isAcessivel
+                      ? "border-gray-300 text-gray-500"
+                      : "border-gray-200 text-gray-300"
+                  }`}
               >
                 {isCompleta ? <Check className="w-5 h-5" /> : <Icone className="w-5 h-5" />}
               </div>
               <div className="ml-3 hidden sm:block">
                 <p
-                  className={`text-sm font-medium ${
-                    isAtual ? "text-blue-600" : isCompleta ? "text-green-600" : "text-gray-500"
-                  }`}
+                  className={`text-sm font-medium ${isAtual ? "text-blue-600" : isCompleta ? "text-green-600" : "text-gray-500"
+                    }`}
                 >
                   {etapa.nome}
                 </p>
@@ -657,8 +664,7 @@ const CadastroFamilia: React.FC = () => {
 
   const renderizarEtapa = () => {
     const getInputClass = (fieldError: string | undefined) =>
-      `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-        fieldError ? "border-red-500" : "border-gray-300"
+      `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldError ? "border-red-500" : "border-gray-300"
       }`
 
     const renderError = (fieldError: string | undefined) =>
@@ -715,9 +721,8 @@ const CadastroFamilia: React.FC = () => {
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({ ...prev, equipamento_id: Number.parseInt(e.target.value) }))
                     }
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.equipamento_id ? "border-red-500" : "border-gray-300"
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.equipamento_id ? "border-red-500" : "border-gray-300"
+                      }`}
                   >
                     <option value={0}>Selecione o equipamento</option>
                     {equipamentos.map((equipamento) => (
@@ -740,6 +745,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
                     <input
                       type="text"
+                      placeholder="Ex: Maria da Silva"
                       value={dadosFamilia.responsavel.nome_completo}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -758,7 +764,7 @@ const CadastroFamilia: React.FC = () => {
                     {renderError(errors.responsavel?.nome_completo)}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento *</label>
                     <input
                       type="date"
                       value={dadosFamilia.responsavel.data_nascimento}
@@ -793,10 +799,11 @@ const CadastroFamilia: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">CPF</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
                     <input
                       type="text"
                       maxLength={14}
+                      placeholder="000.000.000-00"
                       value={dadosFamilia.responsavel.cpf}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -827,6 +834,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Órgão Expedidor</label>
                     <input
                       type="text"
+                      placeholder="Ex: SSP/SP"
                       value={dadosFamilia.responsavel.orgao_expedidor}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -862,7 +870,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Naturalidade</label>
                     <input
                       type="text"
-                      placeholder="Cidade - UF"
+                      placeholder="Ex: Bebedouro - SP"
                       value={dadosFamilia.responsavel.naturalidade}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -878,6 +886,7 @@ const CadastroFamilia: React.FC = () => {
                     <input
                       type="text"
                       maxLength={15}
+                      placeholder="(17) 99123-4567"
                       value={dadosFamilia.responsavel.telefone}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -893,23 +902,23 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Telefone de Recado</label>
                     <input
                       type="text"
-                      placeholder="(00) 00000-0000"
+                      placeholder="(17) 98765-4321"
                       maxLength={15}
                       value={dadosFamilia.responsavel.telefone_recado}
-                      // APLIQUE A FORMATAÇÃO AQUI
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
                           ...prev,
                           responsavel: { ...prev.responsavel, telefone_recado: formatPhone(e.target.value) },
                         }))
                       }
-                      className={getInputClass(undefined)} // Não há validação obrigatória, então não precisa de erro
+                      className={getInputClass(undefined)}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                     <input
                       type="email"
+                      placeholder="exemplo@email.com"
                       value={dadosFamilia.responsavel.email}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -926,6 +935,7 @@ const CadastroFamilia: React.FC = () => {
                     <input
                       type="text"
                       maxLength={11}
+                      placeholder="00000000000"
                       value={dadosFamilia.responsavel.nis}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -942,6 +952,7 @@ const CadastroFamilia: React.FC = () => {
                     <input
                       type="text"
                       maxLength={12}
+                      placeholder="000000000000"
                       value={dadosFamilia.responsavel.titulo_eleitor}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -957,7 +968,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">CTPS</label>
                     <input
                       type="text"
-                      placeholder="Número da CTPS"
+                      placeholder="000000 / 0000-SP"
                       value={dadosFamilia.responsavel.ctps}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -994,7 +1005,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Ocupação</label>
                     <input
                       type="text"
-                      placeholder="Profissão/Ocupação"
+                      placeholder="Ex: Dona de casa"
                       value={dadosFamilia.responsavel.ocupacao}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -1009,12 +1020,17 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Renda Mensal Individual</label>
                     <input
                       type="number"
+                      min="0" // Adiciona o atributo min para melhor semântica
                       placeholder="R$ 0,00"
                       value={dadosFamilia.responsavel.renda_mensal}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
                           ...prev,
-                          responsavel: { ...prev.responsavel, renda_mensal: Number.parseFloat(e.target.value) || 0 },
+                          responsavel: {
+                            ...prev.responsavel,
+                            // AQUI ESTÁ A MUDANÇA: Garante que o valor não seja negativo
+                            renda_mensal: Math.max(0, Number.parseFloat(e.target.value) || 0),
+                          },
                         }))
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1031,6 +1047,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Logradouro *</label>
                     <input
                       type="text"
+                      placeholder="Ex: Rua das Flores"
                       value={dadosFamilia.endereco.logradouro}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -1052,7 +1069,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Número</label>
                     <input
                       type="text"
-                      placeholder="Número"
+                      placeholder="Ex: 123"
                       value={dadosFamilia.endereco.numero}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -1067,7 +1084,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Complemento</label>
                     <input
                       type="text"
-                      placeholder="Apto, Bloco, Casa"
+                      placeholder="Ex: Apto 101, Bloco B"
                       value={dadosFamilia.endereco.complemento}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -1082,6 +1099,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Bairro *</label>
                     <input
                       type="text"
+                      placeholder="Ex: Centro"
                       value={dadosFamilia.endereco.bairro}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: e.target.value } }))
@@ -1100,7 +1118,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
                     <input
                       type="text"
-                      placeholder="Cidade"
+                      placeholder="Ex: Bebedouro"
                       value={dadosFamilia.endereco.cidade}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -1115,6 +1133,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">UF</label>
                     <input
                       type="text"
+                      placeholder="SP"
                       value={dadosFamilia.endereco.uf}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -1131,6 +1150,7 @@ const CadastroFamilia: React.FC = () => {
                     <input
                       type="text"
                       maxLength={9}
+                      placeholder="14700-000"
                       value={dadosFamilia.endereco.cep}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -1146,7 +1166,7 @@ const CadastroFamilia: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Ponto de Referência</label>
                     <input
                       type="text"
-                      placeholder="Próximo a..."
+                      placeholder="Ex: Ao lado do mercado"
                       value={dadosFamilia.endereco.referencia}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
@@ -1214,7 +1234,7 @@ const CadastroFamilia: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo</label>
                         <input
                           type="text"
-                          placeholder="Nome completo"
+                          placeholder="Nome completo do integrante"
                           value={integrante.nome_completo}
                           onChange={(e) => atualizarIntegrante(index, "nome_completo", e.target.value)}
                           onBlur={(e) => atualizarIntegrante(index, "nome_completo", cleanExtraSpaces(e.target.value))}
@@ -1281,7 +1301,7 @@ const CadastroFamilia: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">NIS</label>
                         <input
                           type="text"
-                          placeholder="Número do NIS"
+                          placeholder="00000000000"
                           value={integrante.nis}
                           maxLength={11}
                           onChange={(e) => atualizarIntegrante(index, "nis", formatNumericOnly(e.target.value))}
@@ -1311,7 +1331,7 @@ const CadastroFamilia: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Ocupação</label>
                         <input
                           type="text"
-                          placeholder="Profissão/Ocupação"
+                          placeholder="Ex: Estudante"
                           value={integrante.ocupacao}
                           onChange={(e) => atualizarIntegrante(index, "ocupacao", e.target.value)}
                           onBlur={(e) => atualizarIntegrante(index, "ocupacao", cleanExtraSpaces(e.target.value))}
@@ -1323,10 +1343,12 @@ const CadastroFamilia: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">Renda Mensal Individual</label>
                         <input
                           type="number"
+                          min="0" // Adiciona o atributo min
                           placeholder="R$ 0,00"
                           value={integrante.renda_mensal}
                           onChange={(e) =>
-                            atualizarIntegrante(index, "renda_mensal", Number.parseFloat(e.target.value) || 0)
+                            // AQUI ESTÁ A MUDANÇA: Garante que o valor passado para a função não seja negativo
+                            atualizarIntegrante(index, "renda_mensal", Math.max(0, Number.parseFloat(e.target.value) || 0))
                           }
                           className={getInputClass(errors.integrantes?.[index]?.renda_mensal)}
                         />
@@ -1402,7 +1424,7 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual deficiência?</label>
                   <input
                     type="text"
-                    placeholder="Descreva a deficiência"
+                    placeholder="Descreva a(s) deficiência(s)"
                     value={dadosFamilia.saude.deficiencia_qual}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
@@ -1467,7 +1489,7 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual tratamento?</label>
                   <input
                     type="text"
-                    placeholder="Descreva o tratamento"
+                    placeholder="Descreva o(s) tratamento(s)"
                     value={dadosFamilia.saude.tratamento_qual}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
@@ -1530,7 +1552,7 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual medicação?</label>
                   <input
                     type="text"
-                    placeholder="Descreva a medicação"
+                    placeholder="Descreva a(s) medicação(ões)"
                     value={dadosFamilia.saude.medicacao_qual}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({ ...prev, saude: { ...prev.saude, medicacao_qual: e.target.value } }))
@@ -1649,12 +1671,16 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de Cômodos</label>
                   <input
                     type="number"
-                    placeholder="Número de cômodos"
+                    min="0"
+                    placeholder="Ex: 4"
                     value={dadosFamilia.habitacao.qtd_comodos}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
                         ...prev,
-                        habitacao: { ...prev.habitacao, qtd_comodos: Number.parseInt(e.target.value) || 0 },
+                        habitacao: {
+                          ...prev.habitacao,
+                          qtd_comodos: Math.max(0, Number.parseInt(e.target.value) || 0)
+                        },
                       }))
                     }
                     className={getInputClass(errors.habitacao?.qtd_comodos)}
@@ -1665,12 +1691,16 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade de Dormitórios</label>
                   <input
                     type="number"
-                    placeholder="Número de dormitórios"
+                    min="0"
+                    placeholder="Ex: 2"
                     value={dadosFamilia.habitacao.qtd_dormitorios}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
                         ...prev,
-                        habitacao: { ...prev.habitacao, qtd_dormitorios: Number.parseInt(e.target.value) || 0 },
+                        habitacao: {
+                          ...prev.habitacao,
+                          qtd_dormitorios: Math.max(0, Number.parseInt(e.target.value) || 0)
+                        },
                       }))
                     }
                     className={getInputClass(errors.habitacao?.qtd_dormitorios)}
@@ -1682,138 +1712,61 @@ const CadastroFamilia: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">Tipo de Construção</label>
                 <div className="flex flex-col gap-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="alvenaria"
-                      checked={dadosFamilia.habitacao.tipo_construcao.includes("alvenaria")}
-                      onChange={(e) =>
-                        handleCheckboxChange("habitacao", "tipo_construcao", "alvenaria", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Alvenaria
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="madeira"
-                      checked={dadosFamilia.habitacao.tipo_construcao.includes("madeira")}
-                      onChange={(e) =>
-                        handleCheckboxChange("habitacao", "tipo_construcao", "madeira", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Madeira
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="mista"
-                      checked={dadosFamilia.habitacao.tipo_construcao.includes("mista")}
-                      onChange={(e) => handleCheckboxChange("habitacao", "tipo_construcao", "mista", e.target.checked)}
-                      className="mr-2"
-                    />
-                    Mista
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="taipa"
-                      checked={dadosFamilia.habitacao.tipo_construcao.includes("taipa")}
-                      onChange={(e) => handleCheckboxChange("habitacao", "tipo_construcao", "taipa", e.target.checked)}
-                      className="mr-2"
-                    />
-                    Taipa
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="outro"
-                      checked={dadosFamilia.habitacao.tipo_construcao.includes("outro")}
-                      onChange={(e) => handleCheckboxChange("habitacao", "tipo_construcao", "outro", e.target.checked)}
-                      className="mr-2"
-                    />
-                    Outro
-                  </label>
+                  {[
+                    { value: "alvenaria", label: "Alvenaria" },
+                    { value: "madeira", label: "Madeira" },
+                    { value: "mista", label: "Mista" },
+                    { value: "taipa", label: "Taipa" },
+                    { value: "outro", label: "Outro" },
+                  ].map((option) => (
+                    <label key={option.value} className="flex items-center">
+                      <input
+                        type="radio"
+                        name="tipo_construcao"
+                        value={option.value}
+                        checked={dadosFamilia.habitacao.tipo_construcao === option.value}
+                        onChange={(e) =>
+                          setDadosFamilia((prev) => ({
+                            ...prev,
+                            habitacao: { ...prev.habitacao, tipo_construcao: e.target.value },
+                          }))
+                        }
+                        className="mr-2"
+                      />
+                      {option.label}
+                    </label>
+                  ))}
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">Condição do Domicílio</label>
                 <div className="flex flex-col gap-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="propria_quitada"
-                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("propria_quitada")}
-                      onChange={(e) =>
-                        handleCheckboxChange("habitacao", "condicao_domicilio", "propria_quitada", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Própria Quitada
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="propria_financiada"
-                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("propria_financiada")}
-                      onChange={(e) =>
-                        handleCheckboxChange("habitacao", "condicao_domicilio", "propria_financiada", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Própria Financiada
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="alugada"
-                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("alugada")}
-                      onChange={(e) =>
-                        handleCheckboxChange("habitacao", "condicao_domicilio", "alugada", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Alugada
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="cedida"
-                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("cedida")}
-                      onChange={(e) =>
-                        handleCheckboxChange("habitacao", "condicao_domicilio", "cedida", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Cedida
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="ocupada"
-                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("ocupada")}
-                      onChange={(e) =>
-                        handleCheckboxChange("habitacao", "condicao_domicilio", "ocupada", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Ocupada
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="situacao_rua"
-                      checked={dadosFamilia.habitacao.condicao_domicilio.includes("situacao_rua")}
-                      onChange={(e) =>
-                        handleCheckboxChange("habitacao", "condicao_domicilio", "situacao_rua", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Situação de Rua
-                  </label>
+                  {[
+                    { value: "propria_quitada", label: "Própria Quitada" },
+                    { value: "propria_financiada", label: "Própria Financiada" },
+                    { value: "alugada", label: "Alugada" },
+                    { value: "cedida", label: "Cedida" },
+                    { value: "ocupada", label: "Ocupada" },
+                    { value: "situacao_rua", label: "Situação de Rua" },
+                  ].map((option) => (
+                    <label key={option.value} className="flex items-center">
+                      <input
+                        type="radio"
+                        name="condicao_domicilio"
+                        value={option.value}
+                        checked={dadosFamilia.habitacao.condicao_domicilio === option.value}
+                        onChange={(e) =>
+                          setDadosFamilia((prev) => ({
+                            ...prev,
+                            habitacao: { ...prev.habitacao, condicao_domicilio: e.target.value },
+                          }))
+                        }
+                        className="mr-2"
+                      />
+                      {option.label}
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -1974,7 +1927,7 @@ const CadastroFamilia: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Quem trabalha na família?</label>
                 <input
                   type="text"
-                  placeholder="Nome(s) e ocupação(ões)"
+                  placeholder="Ex: João (pedreiro), Maria (diarista)"
                   value={dadosFamilia.trabalho_renda.quem_trabalha}
                   onChange={(e) =>
                     setDadosFamilia((prev) => ({
@@ -1998,17 +1951,21 @@ const CadastroFamilia: React.FC = () => {
                 </label>
                 <input
                   type="number"
+                  min="0" // ADICIONADO
                   placeholder="R$ 0,00"
                   value={dadosFamilia.trabalho_renda.rendimento_total}
                   onChange={(e) =>
                     setDadosFamilia((prev) => ({
                       ...prev,
-                      trabalho_renda: { ...prev.trabalho_renda, rendimento_total: Number(e.target.value) },
+                      trabalho_renda: {
+                        ...prev.trabalho_renda,
+                        // CORREÇÃO: Garante que o valor não seja negativo
+                        rendimento_total: Math.max(0, Number(e.target.value))
+                      },
                     }))
                   }
                   className={getInputClass(errors.trabalho_renda?.rendimento_total)}
                 />
-                {renderError(errors.trabalho_renda?.rendimento_total)}
               </div>
 
               <div>
@@ -2030,6 +1987,111 @@ const CadastroFamilia: React.FC = () => {
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              <Separator />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Programas de transferência de renda recebidos
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {programasSociais.map((programa) => (
+                    <div key={programa.id} className="space-y-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={dadosFamilia.programas_sociais.some((p) => p.programa_id === programa.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setDadosFamilia((prev) => ({
+                                ...prev,
+                                programas_sociais: [
+                                  ...prev.programas_sociais,
+                                  { programa_id: programa.id, valor: programa.valor_padrao },
+                                ],
+                              }))
+                            } else {
+                              setDadosFamilia((prev) => ({
+                                ...prev,
+                                programas_sociais: prev.programas_sociais.filter((p) => p.programa_id !== programa.id),
+                              }))
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">
+                          {programa.nome} ({programa.codigo})
+                        </span>
+                      </label>
+                      {dadosFamilia.programas_sociais.some((p) => p.programa_id === programa.id) && (
+                        <input
+                          type="number"
+                          min="0" // ADICIONADO
+                          placeholder="Valor recebido"
+                          value={dadosFamilia.programas_sociais.find((p) => p.programa_id === programa.id)?.valor || 0}
+                          onChange={(e) => {
+                            // CORREÇÃO: Garante que o valor não seja negativo
+                            const valor = Math.max(0, Number.parseFloat(e.target.value) || 0);
+                            setDadosFamilia((prev) => ({
+                              ...prev,
+                              programas_sociais: prev.programas_sociais.map((p) =>
+                                p.programa_id === programa.id ? { ...p, valor } : p,
+                              ),
+                            }))
+                          }}
+                          className="ml-6 max-w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Despesas mensais</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {tiposDespesas.map((tipo) => (
+                    <div key={tipo.id}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {tipo.nome} {tipo.obrigatoria && <span className="text-red-500">*</span>}
+                      </label>
+                      <input
+                        type="number"
+                        min="0" // ADICIONADO
+                        placeholder="R$ 0,00"
+                        value={dadosFamilia.despesas.find((d) => d.tipo_despesa_id === tipo.id)?.valor || ""}
+                        onChange={(e) => {
+                          // CORREÇÃO: Garante que o valor não seja negativo
+                          const valor = Math.max(0, Number.parseFloat(e.target.value) || 0);
+                          setDadosFamilia((prev) => {
+                            const despesaExiste = prev.despesas.some((d) => d.tipo_despesa_id === tipo.id)
+                            let novasDespesas
+
+                            if (despesaExiste) {
+                              novasDespesas = prev.despesas.map((d) =>
+                                d.tipo_despesa_id === tipo.id ? { ...d, valor } : d,
+                              )
+                            } else {
+                              novasDespesas = [...prev.despesas, { tipo_despesa_id: tipo.id, valor }]
+                            }
+                            // Filtra para remover despesas com valor 0 que não sejam obrigatórias
+                            return {
+                              ...prev,
+                              despesas: novasDespesas.filter(d => {
+                                const tipoDespesa = tiposDespesas.find(t => t.id === d.tipo_despesa_id)
+                                return d.valor > 0 || (tipoDespesa && tipoDespesa.obrigatoria)
+                              })
+                            }
+                          })
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -2090,7 +2152,7 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual religião?</label>
                   <input
                     type="text"
-                    placeholder="Nome da religião"
+                    placeholder="Ex: Católica, Evangélica"
                     value={dadosFamilia.situacao_social.religiao_qual}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
@@ -2159,7 +2221,7 @@ const CadastroFamilia: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Qual ação social?</label>
                   <input
                     type="text"
-                    placeholder="Nome da ação social"
+                    placeholder="Ex: Grupo de apoio do bairro"
                     value={dadosFamilia.situacao_social.acao_social_qual}
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({
@@ -2230,7 +2292,7 @@ const CadastroFamilia: React.FC = () => {
                       }
                       className="mr-2"
                     />
-                    Saúde
+                    Saúde (Posto de Saúde, UPA, etc.)
                   </label>
                   <label className="flex items-center">
                     <input
@@ -2242,7 +2304,7 @@ const CadastroFamilia: React.FC = () => {
                       }
                       className="mr-2"
                     />
-                    Educação
+                    Educação (Escola, Creche, etc.)
                   </label>
                   <label className="flex items-center">
                     <input
@@ -2295,7 +2357,7 @@ const CadastroFamilia: React.FC = () => {
                       }
                       className="mr-2"
                     />
-                    Assistência Social
+                    Outros de Assistência Social
                   </label>
                 </div>
               </div>
