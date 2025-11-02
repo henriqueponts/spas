@@ -527,7 +527,7 @@ const Logs: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    {log.tipo_log === "atualizacao" && (
+                    {["atualizacao", "criacao", "entrega"].includes(log.tipo_log) && (
                       <button
                         onClick={() => carregarDetalhesLog(log.id)}
                         className="ml-4 p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
