@@ -59,7 +59,6 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         
         body {
           font-family: Arial, sans-serif;
-          /* AJUSTE: Reduzir padding para que o container possa ocupar mais espaço */
           padding: 10px; 
           line-height: 1.4;
           color: #333;
@@ -73,7 +72,6 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
           height: 100%;
           margin: 0 auto;
           border: 2px solid #333;
-          /* AJUSTE: Aumentar padding interno para empurrar o conteúdo */
           padding: 30px; 
           display: flex;
           flex-direction: column;
@@ -98,7 +96,6 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         }
         
         .section {
-          /* AJUSTE: Aumentar margem de fundo para espaçar as seções */
           margin-bottom: 25px; 
         }
         
@@ -125,10 +122,14 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         
         .info-value {
           flex: 1;
+          /* Adicionando propriedades para quebrar texto longo e evitar vazamento */
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          word-break: break-word;
+          /* </CHANGE> */
         }
         
         .signature-section {
-          /* AJUSTE: Aumentar margem superior para afastar do último bloco de dados */
           margin-top: 50px; 
           padding-top: 20px;
           border-top: 1px solid #ccc;
@@ -136,7 +137,6 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
         }
         
         .signature-box {
-          /* AJUSTE: Aumentar para mais espaço entre a frase e a linha de assinatura */
           margin-top: 100px; 
           text-align: center;
         }
@@ -232,15 +232,16 @@ export const gerarReciboAutorizacao = (dados: DadosRecibo) => {
             <span class="info-label">Justificativa:</span>
             <span class="info-value">${dados.autorizacao.justificativa}</span>
           </div>
-          ${dados.autorizacao.observacoes
-      ? `
+          ${
+            dados.autorizacao.observacoes
+              ? `
           <div class="info-row">
             <span class="info-label">Observações:</span>
             <span class="info-value">${dados.autorizacao.observacoes}</span>
           </div>
           `
-      : ""
-    }
+              : ""
+          }
         </div>
         
         <div class="section">

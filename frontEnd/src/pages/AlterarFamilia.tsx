@@ -24,8 +24,20 @@ import { Alert } from "../components/ui/Alert"
 import { Separator } from "../components/ui/Separator"
 import api from "../services/api"
 import {
-  formatCPF, formatPhone, formatCEP, formatNumericOnly, formatUF, formatToUpper, cleanExtraSpaces,
-  isValidCPF, isValidNIS, isDateInPast, isValidEmail, isValidTituloEleitor, isValidName, isMeaningfulText,
+  formatCPF,
+  formatPhone,
+  formatCEP,
+  formatNumericOnly,
+  formatUF,
+  formatToUpper,
+  cleanExtraSpaces,
+  isValidCPF,
+  isValidNIS,
+  isDateInPast,
+  isValidEmail,
+  isValidTituloEleitor,
+  isValidName,
+  isMeaningfulText,
 } from "../utils/formUtils"
 // Tipos baseados na estrutura do banco
 interface Equipamento {
@@ -176,7 +188,7 @@ const AlterarFamilia: React.FC = () => {
   const [tiposDespesas, setTiposDespesas] = useState<TipoDespesa[]>([])
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState<"success" | "error" | "">("")
-  
+
   // NOVO: Estado de erros tipado
   const [errors, setErrors] = useState<FormErrors>({})
 
@@ -230,16 +242,16 @@ const AlterarFamilia: React.FC = () => {
       observacoes: "",
     },
     habitacao: {
-    qtd_comodos: 0,
-    qtd_dormitorios: 0,
-    tipo_construcao: "alvenaria", // <-- CORRIGIDO
-    area_conflito: false,
-    condicao_domicilio: "propria_quitada", // <-- CORRIGIDO
-    energia_eletrica: "propria",
-    agua: "propria",
-    esgoto: "rede",
-    coleta_lixo: true,
-  },
+      qtd_comodos: 0,
+      qtd_dormitorios: 0,
+      tipo_construcao: "alvenaria", // <-- CORRIGIDO
+      area_conflito: false,
+      condicao_domicilio: "propria_quitada", // <-- CORRIGIDO
+      energia_eletrica: "propria",
+      agua: "propria",
+      esgoto: "rede",
+      coleta_lixo: true,
+    },
     trabalho_renda: {
       quem_trabalha: "",
       rendimento_total: 0,
@@ -271,7 +283,7 @@ const AlterarFamilia: React.FC = () => {
 
   // NOVO: Função de carregamento envolvida em useCallback
   const carregarDados = useCallback(async () => {
-    if (!id) return;
+    if (!id) return
     try {
       setLoadingData(true)
       console.log("📋 Iniciando carregamento de dados...")
@@ -394,10 +406,12 @@ const AlterarFamilia: React.FC = () => {
           rendimento_total: familiaData.trabalho_renda?.rendimento_total || 0,
           observacoes: familiaData.trabalho_renda?.observacoes || "",
         },
-        programas_sociais: (familiaData.programas_sociais || []).map((programa: { programa_id: number; valor: number }) => ({
-          programa_id: programa.programa_id,
-          valor: programa.valor,
-        })),
+        programas_sociais: (familiaData.programas_sociais || []).map(
+          (programa: { programa_id: number; valor: number }) => ({
+            programa_id: programa.programa_id,
+            valor: programa.valor,
+          }),
+        ),
         despesas: (familiaData.despesas || []).map((despesa: { tipo_despesa_id: number; valor: number }) => ({
           tipo_despesa_id: despesa.tipo_despesa_id,
           valor: despesa.valor,
@@ -457,40 +471,53 @@ const AlterarFamilia: React.FC = () => {
         if (!responsavel.nome_completo.trim()) {
           newErrors.responsavel = { ...newErrors.responsavel, nome_completo: "Nome completo é obrigatório." }
         } else if (!isValidName(responsavel.nome_completo, true)) {
-          newErrors.responsavel = { ...newErrors.responsavel, nome_completo: "Por favor, insira um nome e sobrenome válidos." }
+          newErrors.responsavel = {
+            ...newErrors.responsavel,
+            nome_completo: "Por favor, insira um nome e sobrenome válidos.",
+          }
         }
         if (!responsavel.data_nascimento) {
-          if (!newErrors.responsavel) newErrors.responsavel = {};
+          if (!newErrors.responsavel) newErrors.responsavel = {}
           newErrors.responsavel.data_nascimento = "Data de nascimento é obrigatória."
         } else if (!isDateInPast(responsavel.data_nascimento)) {
-          if (!newErrors.responsavel) newErrors.responsavel = {};
+          if (!newErrors.responsavel) newErrors.responsavel = {}
           newErrors.responsavel.data_nascimento = "Data de nascimento não pode ser no futuro."
         } else {
           // Adiciona a verificação de idade
-          const hoje = new Date();
+          const hoje = new Date()
           // Adiciona 1 hora para evitar problemas com fuso horário que podem "voltar" o dia
-          const dataNascimento = new Date(responsavel.data_nascimento);
-          dataNascimento.setHours(dataNascimento.getHours() + 1);
-          
-          let idade = hoje.getFullYear() - dataNascimento.getFullYear();
-          const m = hoje.getMonth() - dataNascimento.getMonth();
+          const dataNascimento = new Date(responsavel.data_nascimento)
+          dataNascimento.setHours(dataNascimento.getHours() + 1)
+
+          let idade = hoje.getFullYear() - dataNascimento.getFullYear()
+          const m = hoje.getMonth() - dataNascimento.getMonth()
           if (m < 0 || (m === 0 && hoje.getDate() < dataNascimento.getDate())) {
-            idade--;
+            idade--
           }
           if (idade < 18) {
-            if (!newErrors.responsavel) newErrors.responsavel = {};
-            newErrors.responsavel.data_nascimento = "O responsável deve ter pelo menos 18 anos.";
+            if (!newErrors.responsavel) newErrors.responsavel = {}
+            newErrors.responsavel.data_nascimento = "O responsável deve ter pelo menos 18 anos."
           }
         }
         if (!responsavel.data_nascimento) {
           newErrors.responsavel = { ...newErrors.responsavel, data_nascimento: "Data de nascimento é obrigatória." }
         } else if (!isDateInPast(responsavel.data_nascimento)) {
-          newErrors.responsavel = { ...newErrors.responsavel, data_nascimento: "Data de nascimento não pode ser no futuro." }
+          newErrors.responsavel = {
+            ...newErrors.responsavel,
+            data_nascimento: "Data de nascimento não pode ser no futuro.",
+          }
         }
         if (!responsavel.cpf) {
           newErrors.responsavel = { ...newErrors.responsavel, cpf: "CPF é obrigatório." }
         } else if (!isValidCPF(responsavel.cpf)) {
           newErrors.responsavel = { ...newErrors.responsavel, cpf: "CPF inválido." }
+        }
+        if (!responsavel.rg.trim()) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.rg = "RG é obrigatório."
+        } else if (responsavel.rg.length > 20) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.rg = "RG precisa ter 20 dígitos ou menos."
         }
         if (!endereco.logradouro.trim()) {
           newErrors.endereco = { ...newErrors.endereco, logradouro: "Logradouro é obrigatório." }
@@ -498,32 +525,34 @@ const AlterarFamilia: React.FC = () => {
         if (!endereco.bairro.trim()) {
           newErrors.endereco = { ...newErrors.endereco, bairro: "Bairro é obrigatório." }
         }
-               if (responsavel.nis && !isValidNIS(responsavel.nis)) {
-          if(!newErrors.responsavel) newErrors.responsavel = {};
-          newErrors.responsavel.nis = "NIS inválido.";
+        if (responsavel.nis && !isValidNIS(responsavel.nis)) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.nis = "NIS inválido."
         }
         if (responsavel.email && !isValidEmail(responsavel.email)) {
-          if(!newErrors.responsavel) newErrors.responsavel = {};
-          newErrors.responsavel.email = "E-mail inválido.";
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.email = "E-mail inválido."
         }
         if (responsavel.titulo_eleitor && !isValidTituloEleitor(responsavel.titulo_eleitor)) {
-          if(!newErrors.responsavel) newErrors.responsavel = {};
-          newErrors.responsavel.titulo_eleitor = "Título de Eleitor inválido.";
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.titulo_eleitor = "Título de Eleitor inválido."
         }
 
         if (!endereco.logradouro.trim()) {
-          if(!newErrors.endereco) newErrors.endereco = {};
+          if (!newErrors.endereco) newErrors.endereco = {}
           newErrors.endereco.logradouro = "Logradouro é obrigatório."
-        } else if (!isMeaningfulText(endereco.logradouro)) { // ADICIONADO
-          if(!newErrors.endereco) newErrors.endereco = {};
+        } else if (!isMeaningfulText(endereco.logradouro)) {
+          // ADICIONADO
+          if (!newErrors.endereco) newErrors.endereco = {}
           newErrors.endereco.logradouro = "Logradouro inválido."
         }
 
         if (!endereco.bairro.trim()) {
-          if(!newErrors.endereco) newErrors.endereco = {};
+          if (!newErrors.endereco) newErrors.endereco = {}
           newErrors.endereco.bairro = "Bairro é obrigatório."
-        } else if (!isMeaningfulText(endereco.bairro)) { // ADICIONADO
-          if(!newErrors.endereco) newErrors.endereco = {};
+        } else if (!isMeaningfulText(endereco.bairro)) {
+          // ADICIONADO
+          if (!newErrors.endereco) newErrors.endereco = {}
           newErrors.endereco.bairro = "Bairro inválido."
         }
         break
@@ -549,7 +578,7 @@ const AlterarFamilia: React.FC = () => {
             integrantesErrors[index] = null
           }
         })
-        if (integrantesErrors.some(e => e !== null)) {
+        if (integrantesErrors.some((e) => e !== null)) {
           newErrors.integrantes = integrantesErrors
         }
         break
@@ -630,7 +659,7 @@ const AlterarFamilia: React.FC = () => {
   ) => {
     setDadosFamilia((prev) => {
       // Garantimos que currentArray seja sempre o array de strings de servicos_publicos
-      const currentArray = prev.situacao_social.servicos_publicos;
+      const currentArray = prev.situacao_social.servicos_publicos
 
       return {
         ...prev,
@@ -638,15 +667,13 @@ const AlterarFamilia: React.FC = () => {
         // então .filter() e o spread operator funcionam corretamente.
         situacao_social: {
           ...prev.situacao_social,
-          [field]: checked 
-            ? [...currentArray, value] 
-            : currentArray.filter((item) => item !== value),
+          [field]: checked ? [...currentArray, value] : currentArray.filter((item) => item !== value),
         },
       }
     })
   }
 
-const validarFormularioCompleto = (): boolean => {
+  const validarFormularioCompleto = (): boolean => {
     for (let i = 0; i < ETAPAS.length; i++) {
       if (!validarEtapa(i)) {
         setEtapaAtual(i)
@@ -745,10 +772,10 @@ const validarFormularioCompleto = (): boolean => {
   )
 
   const renderizarEtapa = () => {
-        // Funções auxiliares para renderizar erros
+    // Funções auxiliares para renderizar erros
     const getInputClass = (fieldError: string | undefined) =>
       `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-        fieldError ? 'border-red-500' : 'border-gray-300'
+        fieldError ? "border-red-500" : "border-gray-300"
       }`
 
     const renderError = (fieldError: string | undefined) =>
@@ -781,12 +808,16 @@ const validarFormularioCompleto = (): boolean => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Profissional Responsável *</label>
                   <select
                     value={dadosFamilia.profissional_id}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, profissional_id: Number.parseInt(e.target.value) }))}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({ ...prev, profissional_id: Number.parseInt(e.target.value) }))
+                    }
                     className={getInputClass(errors.profissional_id)}
                   >
                     <option value={0}>Selecione o profissional</option>
                     {usuarios.map((usuario) => (
-                      <option key={usuario.id} value={usuario.id}>{usuario.nome}</option>
+                      <option key={usuario.id} value={usuario.id}>
+                        {usuario.nome}
+                      </option>
                     ))}
                   </select>
                   {renderError(errors.profissional_id)}
@@ -815,68 +846,107 @@ const validarFormularioCompleto = (): boolean => {
               {/* Dados do Responsável */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-gray-900">Dados do Responsável Familiar</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Linha 1 */}
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
-                      <input
-                        type="text"
-                        value={dadosFamilia.responsavel.nome_completo}
-                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nome_completo: e.target.value } }))}
-                        onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nome_completo: cleanExtraSpaces(e.target.value) } }))}
-                        className={getInputClass(errors.responsavel?.nome_completo)}
-                      />
-                      {renderError(errors.responsavel?.nome_completo)}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento *</label>
-                      <input
-                        type="date"
-                        value={dadosFamilia.responsavel.data_nascimento}
-                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, data_nascimento: e.target.value } }))}
-                        className={getInputClass(errors.responsavel?.data_nascimento)}
-                      />
-                      {renderError(errors.responsavel?.data_nascimento)}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Sexo</label>
-                      <select
-                          value={dadosFamilia.responsavel.sexo}
-                          onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, sexo: e.target.value as "feminino" | "masculino" | "outro" } }))}
-                          className={getInputClass(undefined)}
-                        >                        
-                        <option value="feminino">Feminino</option>
-                        <option value="masculino">Masculino</option>
-                        <option value="outro">Outro</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
-                      <input
-                        type="text"
-                        maxLength={14}
-                        value={dadosFamilia.responsavel.cpf}
-                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, cpf: formatCPF(e.target.value) } }))}
-                        className={getInputClass(errors.responsavel?.cpf)}
-                      />
-                      {renderError(errors.responsavel?.cpf)}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">RG</label>
-                      <input
-                        type="text"
-                        value={dadosFamilia.responsavel.rg}
-                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, rg: formatNumericOnly(e.target.value) } }))}
-                        className={getInputClass(undefined)}
-                      />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Linha 1 */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
+                    <input
+                      type="text"
+                      value={dadosFamilia.responsavel.nome_completo}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, nome_completo: e.target.value },
+                        }))
+                      }
+                      onBlur={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, nome_completo: cleanExtraSpaces(e.target.value) },
+                        }))
+                      }
+                      className={getInputClass(errors.responsavel?.nome_completo)}
+                    />
+                    {renderError(errors.responsavel?.nome_completo)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento *</label>
+                    <input
+                      type="date"
+                      value={dadosFamilia.responsavel.data_nascimento}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, data_nascimento: e.target.value },
+                        }))
+                      }
+                      className={getInputClass(errors.responsavel?.data_nascimento)}
+                    />
+                    {renderError(errors.responsavel?.data_nascimento)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Sexo</label>
+                    <select
+                      value={dadosFamilia.responsavel.sexo}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: {
+                            ...prev.responsavel,
+                            sexo: e.target.value as "feminino" | "masculino" | "outro",
+                          },
+                        }))
+                      }
+                      className={getInputClass(undefined)}
+                    >
+                      <option value="feminino">Feminino</option>
+                      <option value="masculino">Masculino</option>
+                      <option value="outro">Outro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
+                    <input
+                      type="text"
+                      maxLength={14}
+                      value={dadosFamilia.responsavel.cpf}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, cpf: formatCPF(e.target.value) },
+                        }))
+                      }
+                      className={getInputClass(errors.responsavel?.cpf)}
+                    />
+                    {renderError(errors.responsavel?.cpf)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">RG *</label>
+                    <input
+                      type="text"
+                      value={dadosFamilia.responsavel.rg}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, rg: formatNumericOnly(e.target.value) },
+                        }))
+                      }
+                      className={getInputClass(errors.responsavel?.rg)}
+                    />
+                    {errors.responsavel?.rg && <p className="text-red-500 text-sm mt-1">{errors.responsavel.rg}</p>}
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Órgão Expedidor</label>
                     <input
                       type="text"
                       placeholder="SSP/SP"
                       value={dadosFamilia.responsavel.orgao_expedidor}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, orgao_expedidor: formatToUpper(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, orgao_expedidor: formatToUpper(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(undefined)}
                     />
                   </div>
@@ -921,7 +991,12 @@ const validarFormularioCompleto = (): boolean => {
                       type="text"
                       maxLength={15}
                       value={dadosFamilia.responsavel.telefone}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, telefone: formatPhone(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          responsavel: { ...prev.responsavel, telefone: formatPhone(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(undefined)}
                     />
                   </div>
@@ -942,138 +1017,160 @@ const validarFormularioCompleto = (): boolean => {
                       className={getInputClass(undefined)} // Não há validação obrigatória, então não precisa de erro
                     />
                   </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                      <input
-                        type="email"
-                        value={dadosFamilia.responsavel.email}
-                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, email: e.target.value } }))}
-                        className={getInputClass(errors.responsavel?.email)}
-                      />
-                      {renderError(errors.responsavel?.email)}
-                    </div>
-                  </div>                    
                   <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">NIS</label>
-                      <input
-                        type="text"
-                        maxLength={11}
-                        value={dadosFamilia.responsavel.nis}
-                        onChange={(e) => setDadosFamilia((prev) => ({ ...prev, responsavel: { ...prev.responsavel, nis: formatNumericOnly(e.target.value) } }))}
-                        className={getInputClass(errors.responsavel?.nis)}
-                      />
-                      {renderError(errors.responsavel?.nis)}
-                    </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Título de Eleitor</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                     <input
-                      type="text"
-                      placeholder="Número do Título"
-                      value={dadosFamilia.responsavel.titulo_eleitor}
+                      type="email"
+                      value={dadosFamilia.responsavel.email}
                       onChange={(e) =>
                         setDadosFamilia((prev) => ({
                           ...prev,
-                          responsavel: { ...prev.responsavel, titulo_eleitor: e.target.value },
+                          responsavel: { ...prev.responsavel, email: e.target.value },
                         }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={getInputClass(errors.responsavel?.email)}
                     />
+                    {renderError(errors.responsavel?.email)}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">CTPS</label>
-                    <input
-                      type="text"
-                      placeholder="Número da CTPS"
-                      value={dadosFamilia.responsavel.ctps}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, ctps: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Escolaridade</label>
-                    <select
-                      value={dadosFamilia.responsavel.escolaridade}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, escolaridade: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="nao_alfabetizado">Não Alfabetizado</option>
-                      <option value="fundamental_incompleto">Fundamental Incompleto</option>
-                      <option value="fundamental_completo">Fundamental Completo</option>
-                      <option value="medio_incompleto">Médio Incompleto</option>
-                      <option value="medio_completo">Médio Completo</option>
-                      <option value="superior_incompleto">Superior Incompleto</option>
-                      <option value="superior_completo">Superior Completo</option>
-                      <option value="pos_graduacao">Pós-graduação</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Ocupação</label>
-                    <input
-                      type="text"
-                      placeholder="Profissão/Ocupação"
-                      value={dadosFamilia.responsavel.ocupacao}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, ocupacao: e.target.value },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Renda Mensal Individual</label>
-                    <input
-                      type="number"
-                      placeholder="R$ 0,00"
-                      value={dadosFamilia.responsavel.renda_mensal}
-                      onChange={(e) =>
-                        setDadosFamilia((prev) => ({
-                          ...prev,
-                          responsavel: { ...prev.responsavel, renda_mensal: Number.parseFloat(e.target.value) || 0 },
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Endereço */}
-                <h3 className="text-lg font-medium text-gray-900">Endereço</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="md:col-span-2">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Logradouro *</label>
-                  <input
-                    type="text"
-                    value={dadosFamilia.endereco.logradouro}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, logradouro: e.target.value } }))}
-                    onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, logradouro: cleanExtraSpaces(e.target.value) } }))}
-                    className={getInputClass(errors.endereco?.logradouro)}
-                  />
-                  {renderError(errors.endereco?.logradouro)}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Número</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">NIS</label>
                   <input
                     type="text"
-                    value={dadosFamilia.endereco.numero}
-                    onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, numero: e.target.value } }))}
-                    className={getInputClass(undefined)}
+                    maxLength={11}
+                    value={dadosFamilia.responsavel.nis}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        responsavel: { ...prev.responsavel, nis: formatNumericOnly(e.target.value) },
+                      }))
+                    }
+                    className={getInputClass(errors.responsavel?.nis)}
+                  />
+                  {renderError(errors.responsavel?.nis)}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Título de Eleitor</label>
+                  <input
+                    type="text"
+                    placeholder="Número do Título"
+                    value={dadosFamilia.responsavel.titulo_eleitor}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        responsavel: { ...prev.responsavel, titulo_eleitor: e.target.value },
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CTPS</label>
+                  <input
+                    type="text"
+                    placeholder="Número da CTPS"
+                    value={dadosFamilia.responsavel.ctps}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        responsavel: { ...prev.responsavel, ctps: e.target.value },
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Escolaridade</label>
+                  <select
+                    value={dadosFamilia.responsavel.escolaridade}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        responsavel: { ...prev.responsavel, escolaridade: e.target.value },
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="nao_alfabetizado">Não Alfabetizado</option>
+                    <option value="fundamental_incompleto">Fundamental Incompleto</option>
+                    <option value="fundamental_completo">Fundamental Completo</option>
+                    <option value="medio_incompleto">Médio Incompleto</option>
+                    <option value="medio_completo">Médio Completo</option>
+                    <option value="superior_incompleto">Superior Incompleto</option>
+                    <option value="superior_completo">Superior Completo</option>
+                    <option value="pos_graduacao">Pós-graduação</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ocupação</label>
+                  <input
+                    type="text"
+                    placeholder="Profissão/Ocupação"
+                    value={dadosFamilia.responsavel.ocupacao}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        responsavel: { ...prev.responsavel, ocupacao: e.target.value },
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Renda Mensal Individual</label>
+                  <input
+                    type="number"
+                    placeholder="R$ 0,00"
+                    value={dadosFamilia.responsavel.renda_mensal}
+                    onChange={(e) =>
+                      setDadosFamilia((prev) => ({
+                        ...prev,
+                        responsavel: { ...prev.responsavel, renda_mensal: Number.parseFloat(e.target.value) || 0 },
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Endereço */}
+              <h3 className="text-lg font-medium text-gray-900">Endereço</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Logradouro *</label>
+                    <input
+                      type="text"
+                      value={dadosFamilia.endereco.logradouro}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, logradouro: e.target.value },
+                        }))
+                      }
+                      onBlur={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, logradouro: cleanExtraSpaces(e.target.value) },
+                        }))
+                      }
+                      className={getInputClass(errors.endereco?.logradouro)}
+                    />
+                    {renderError(errors.endereco?.logradouro)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Número</label>
+                    <input
+                      type="text"
+                      value={dadosFamilia.endereco.numero}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, numero: e.target.value } }))
+                      }
+                      className={getInputClass(undefined)}
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Complemento</label>
                     <input
@@ -1094,12 +1191,19 @@ const validarFormularioCompleto = (): boolean => {
                     <input
                       type="text"
                       value={dadosFamilia.endereco.bairro}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: e.target.value } }))}
-                      onBlur={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: cleanExtraSpaces(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: e.target.value } }))
+                      }
+                      onBlur={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, bairro: cleanExtraSpaces(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(errors.endereco?.bairro)}
                     />
                     {renderError(errors.endereco?.bairro)}
-                  </div>                 
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
                     <input
@@ -1121,7 +1225,12 @@ const validarFormularioCompleto = (): boolean => {
                       type="text"
                       maxLength={2}
                       value={dadosFamilia.endereco.uf}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, uf: formatUF(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, uf: formatUF(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(undefined)}
                     />
                   </div>
@@ -1131,7 +1240,12 @@ const validarFormularioCompleto = (): boolean => {
                       type="text"
                       maxLength={9}
                       value={dadosFamilia.endereco.cep}
-                      onChange={(e) => setDadosFamilia((prev) => ({ ...prev, endereco: { ...prev.endereco, cep: formatCEP(e.target.value) } }))}
+                      onChange={(e) =>
+                        setDadosFamilia((prev) => ({
+                          ...prev,
+                          endereco: { ...prev.endereco, cep: formatCEP(e.target.value) },
+                        }))
+                      }
                       className={getInputClass(undefined)}
                     />
                   </div>
@@ -1214,56 +1328,58 @@ const validarFormularioCompleto = (): boolean => {
                         />
                         {renderError(errors.integrantes?.[index]?.nome_completo)}
                       </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento *</label>
-                          <input
-                            type="date"
-                            value={integrante.data_nascimento}
-                            onChange={(e) => atualizarIntegrante(index, "data_nascimento", e.target.value)}
-                            className={getInputClass(errors.integrantes?.[index]?.data_nascimento)}
-                          />
-                          {renderError(errors.integrantes?.[index]?.data_nascimento)}
-                        </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Parentesco</label>
-                            <select
-                              value={integrante.tipo_membro}
-                              onChange={(e) => atualizarIntegrante(index, "tipo_membro", e.target.value)}
-                              className={getInputClass(undefined)}
-                            >
-                              <option value="conjuge">Cônjuge</option>
-                              <option value="filho">Filho(a)</option>
-                              <option value="pai">Pai</option>
-                              <option value="mae">Mãe</option>
-                              <option value="irmao">Irmão/Irmã</option>
-                              <option value="avo">Avô/Avó</option>
-                              <option value="neto">Neto(a)</option>
-                              <option value="outro">Outro</option>
-                            </select>
-                          </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Sexo</label>
-                              <select
-                                value={integrante.sexo}
-                                onChange={(e) => atualizarIntegrante(index, "sexo", e.target.value as "feminino" | "masculino" | "outro")}
-                                className={getInputClass(undefined)}
-                              >
-                                <option value="feminino">Feminino</option>
-                                <option value="masculino">Masculino</option>
-                                <option value="outro">Outro</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
-                              <input
-                                type="text"
-                                maxLength={14}
-                                value={integrante.cpf}
-                                onChange={(e) => atualizarIntegrante(index, "cpf", formatCPF(e.target.value))}
-                                className={getInputClass(errors.integrantes?.[index]?.cpf)}
-                              />
-                              {renderError(errors.integrantes?.[index]?.cpf)}
-                            </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Data de Nascimento *</label>
+                        <input
+                          type="date"
+                          value={integrante.data_nascimento}
+                          onChange={(e) => atualizarIntegrante(index, "data_nascimento", e.target.value)}
+                          className={getInputClass(errors.integrantes?.[index]?.data_nascimento)}
+                        />
+                        {renderError(errors.integrantes?.[index]?.data_nascimento)}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Parentesco</label>
+                        <select
+                          value={integrante.tipo_membro}
+                          onChange={(e) => atualizarIntegrante(index, "tipo_membro", e.target.value)}
+                          className={getInputClass(undefined)}
+                        >
+                          <option value="conjuge">Cônjuge</option>
+                          <option value="filho">Filho(a)</option>
+                          <option value="pai">Pai</option>
+                          <option value="mae">Mãe</option>
+                          <option value="irmao">Irmão/Irmã</option>
+                          <option value="avo">Avô/Avó</option>
+                          <option value="neto">Neto(a)</option>
+                          <option value="outro">Outro</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Sexo</label>
+                        <select
+                          value={integrante.sexo}
+                          onChange={(e) =>
+                            atualizarIntegrante(index, "sexo", e.target.value as "feminino" | "masculino" | "outro")
+                          }
+                          className={getInputClass(undefined)}
+                        >
+                          <option value="feminino">Feminino</option>
+                          <option value="masculino">Masculino</option>
+                          <option value="outro">Outro</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
+                        <input
+                          type="text"
+                          maxLength={14}
+                          value={integrante.cpf}
+                          onChange={(e) => atualizarIntegrante(index, "cpf", formatCPF(e.target.value))}
+                          className={getInputClass(errors.integrantes?.[index]?.cpf)}
+                        />
+                        {renderError(errors.integrantes?.[index]?.cpf)}
+                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">NIS</label>
                         <input
@@ -1597,7 +1713,7 @@ const validarFormularioCompleto = (): boolean => {
           </Card>
         )
 
-        case 3: // Habitação
+      case 3: // Habitação
         return (
           <Card>
             <CardHeader>
@@ -1621,7 +1737,7 @@ const validarFormularioCompleto = (): boolean => {
                         ...prev,
                         habitacao: {
                           ...prev.habitacao,
-                          qtd_comodos: Math.max(0, Number.parseInt(e.target.value) || 0)
+                          qtd_comodos: Math.max(0, Number.parseInt(e.target.value) || 0),
                         },
                       }))
                     }
@@ -1641,7 +1757,7 @@ const validarFormularioCompleto = (): boolean => {
                         ...prev,
                         habitacao: {
                           ...prev.habitacao,
-                          qtd_dormitorios: Math.max(0, Number.parseInt(e.target.value) || 0)
+                          qtd_dormitorios: Math.max(0, Number.parseInt(e.target.value) || 0),
                         },
                       }))
                     }
@@ -1962,8 +2078,8 @@ const validarFormularioCompleto = (): boolean => {
                           placeholder="Valor recebido"
                           value={dadosFamilia.programas_sociais.find((p) => p.programa_id === programa.id)?.valor || 0}
                           onChange={(e) => {
-                             // CORREÇÃO: Garante que o valor não seja negativo
-                              const valor = Math.max(0, Number.parseFloat(e.target.value) || 0)
+                            // CORREÇÃO: Garante que o valor não seja negativo
+                            const valor = Math.max(0, Number.parseFloat(e.target.value) || 0)
                             setDadosFamilia((prev) => ({
                               ...prev,
                               programas_sociais: prev.programas_sociais.map((p) =>
@@ -1996,7 +2112,7 @@ const validarFormularioCompleto = (): boolean => {
                         value={dadosFamilia.despesas.find((d) => d.tipo_despesa_id === tipo.id)?.valor || 0}
                         onChange={(e) => {
                           // CORREÇÃO: Garante que o valor não seja negativo
-                          const valor = Math.max(0, Number.parseFloat(e.target.value) || 0);
+                          const valor = Math.max(0, Number.parseFloat(e.target.value) || 0)
                           setDadosFamilia((prev) => ({
                             ...prev,
                             despesas: prev.despesas
@@ -2156,109 +2272,108 @@ const validarFormularioCompleto = (): boolean => {
               <Separator />
 
               <div>
-                
-                                <label className="block text-sm font-medium text-gray-700 mb-3">Serviços Públicos Utilizados</label>
-                                <div className="flex flex-col gap-2">
-                                  <label className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      value="cras"
-                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("cras")}
-                                      onChange={(e) =>
-                                        handleCheckboxChange("situacao_social", "servicos_publicos", "cras", e.target.checked)
-                                      }
-                                      className="mr-2"
-                                    />
-                                    CRAS
-                                  </label>
-                                  <label className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      value="creas"
-                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("creas")}
-                                      onChange={(e) =>
-                                        handleCheckboxChange("situacao_social", "servicos_publicos", "creas", e.target.checked)
-                                      }
-                                      className="mr-2"
-                                    />
-                                    CREAS
-                                  </label>
-                                  <label className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      value="saude"
-                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("saude")}
-                                      onChange={(e) =>
-                                        handleCheckboxChange("situacao_social", "servicos_publicos", "saude", e.target.checked)
-                                      }
-                                      className="mr-2"
-                                    />
-                                    Saúde (Posto de Saúde, UPA, etc.)
-                                  </label>
-                                  <label className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      value="educacao"
-                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("educacao")}
-                                      onChange={(e) =>
-                                        handleCheckboxChange("situacao_social", "servicos_publicos", "educacao", e.target.checked)
-                                      }
-                                      className="mr-2"
-                                    />
-                                    Educação (Escola, Creche, etc.)
-                                  </label>
-                                  <label className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      value="habitacao"
-                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("habitacao")}
-                                      onChange={(e) =>
-                                        handleCheckboxChange("situacao_social", "servicos_publicos", "habitacao", e.target.checked)
-                                      }
-                                      className="mr-2"
-                                    />
-                                    Habitação
-                                  </label>
-                                  <label className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      value="assistencia_social"
-                                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("assistencia_social")}
-                                      onChange={(e) =>
-                                        handleCheckboxChange(
-                                          "situacao_social",
-                                          "servicos_publicos",
-                                          "assistencia_social",
-                                          e.target.checked,
-                                        )
-                                      }
-                                      className="mr-2"
-                                    />
-                                    Outros de Assistência Social
-                                  </label>
-                                </div>
-                              </div>
-                
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
-                                <textarea
-                                  placeholder="Outras informações relevantes sobre a situação social da família"
-                                  value={dadosFamilia.situacao_social.observacoes}
-                                  onChange={(e) =>
-                                    setDadosFamilia((prev) => ({
-                                      ...prev,
-                                      situacao_social: { ...prev.situacao_social, observacoes: e.target.value },
-                                    }))
-                                  }
-                                  onBlur={(e) =>
-                                    setDadosFamilia((prev) => ({
-                                      ...prev,
-                                      situacao_social: { ...prev.situacao_social, observacoes: cleanExtraSpaces(e.target.value) },
-                                    }))
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                              </div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Serviços Públicos Utilizados</label>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="cras"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("cras")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "cras", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    CRAS
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="creas"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("creas")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "creas", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    CREAS
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="saude"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("saude")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "saude", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Saúde (Posto de Saúde, UPA, etc.)
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="educacao"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("educacao")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "educacao", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Educação (Escola, Creche, etc.)
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="habitacao"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("habitacao")}
+                      onChange={(e) =>
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "habitacao", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    Habitação
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value="assistencia_social"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("assistencia_social")}
+                      onChange={(e) =>
+                        handleCheckboxChange(
+                          "situacao_social",
+                          "servicos_publicos",
+                          "assistencia_social",
+                          e.target.checked,
+                        )
+                      }
+                      className="mr-2"
+                    />
+                    Outros de Assistência Social
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
+                <textarea
+                  placeholder="Outras informações relevantes sobre a situação social da família"
+                  value={dadosFamilia.situacao_social.observacoes}
+                  onChange={(e) =>
+                    setDadosFamilia((prev) => ({
+                      ...prev,
+                      situacao_social: { ...prev.situacao_social, observacoes: e.target.value },
+                    }))
+                  }
+                  onBlur={(e) =>
+                    setDadosFamilia((prev) => ({
+                      ...prev,
+                      situacao_social: { ...prev.situacao_social, observacoes: cleanExtraSpaces(e.target.value) },
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </CardContent>
           </Card>
         )

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react"
 import { User, Users, Heart, Home, Briefcase, Globe, Save, ChevronLeft, ChevronRight, Check } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
-import { Alert } from "../components/ui/Alert"
+import { Alert, AlertDescription } from "../components/ui/Alert"
 import { Separator } from "../components/ui/Separator"
 import api from "../services/api"
 import Header from "../components/Header"
@@ -368,6 +368,13 @@ const CadastroFamilia: React.FC = () => {
           if (!newErrors.responsavel) newErrors.responsavel = {}
           newErrors.responsavel.cpf = "CPF inválido."
         }
+        if (!responsavel.rg.trim()) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.rg = "RG é obrigatório."
+        } else if (responsavel.rg.length > 20) {
+          if (!newErrors.responsavel) newErrors.responsavel = {}
+          newErrors.responsavel.rg = "RG precisa ter 20 dígitos ou menos."
+        }
         if (responsavel.email && !isValidEmail(responsavel.email)) {
           newErrors.responsavel = { ...newErrors.responsavel, email: "E-mail inválido." }
         }
@@ -443,7 +450,6 @@ const CadastroFamilia: React.FC = () => {
           newErrors.saude = { ...newErrors.saude, dependente_quem: "Descrição inválida." }
         }
         break
-
 
       case 4: // Trabalho e Renda
         if (trabalho_renda.rendimento_total !== undefined && trabalho_renda.rendimento_total !== null) {
@@ -622,21 +628,23 @@ const CadastroFamilia: React.FC = () => {
           return (
             <div key={etapa.id} className="flex items-center">
               <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${isCompleta
-                  ? "bg-green-500 border-green-500 text-white"
-                  : isAtual
-                    ? "bg-blue-500 border-blue-500 text-white"
-                    : isAcessivel
-                      ? "border-gray-300 text-gray-500"
-                      : "border-gray-200 text-gray-300"
-                  }`}
+                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
+                  isCompleta
+                    ? "bg-green-500 border-green-500 text-white"
+                    : isAtual
+                      ? "bg-blue-500 border-blue-500 text-white"
+                      : isAcessivel
+                        ? "border-gray-300 text-gray-500"
+                        : "border-gray-200 text-gray-300"
+                }`}
               >
                 {isCompleta ? <Check className="w-5 h-5" /> : <Icone className="w-5 h-5" />}
               </div>
               <div className="ml-3 hidden sm:block">
                 <p
-                  className={`text-sm font-medium ${isAtual ? "text-blue-600" : isCompleta ? "text-green-600" : "text-gray-500"
-                    }`}
+                  className={`text-sm font-medium ${
+                    isAtual ? "text-blue-600" : isCompleta ? "text-green-600" : "text-gray-500"
+                  }`}
                 >
                   {etapa.nome}
                 </p>
@@ -664,7 +672,8 @@ const CadastroFamilia: React.FC = () => {
 
   const renderizarEtapa = () => {
     const getInputClass = (fieldError: string | undefined) =>
-      `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${fieldError ? "border-red-500" : "border-gray-300"
+      `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        fieldError ? "border-red-500" : "border-gray-300"
       }`
 
     const renderError = (fieldError: string | undefined) =>
@@ -721,8 +730,9 @@ const CadastroFamilia: React.FC = () => {
                     onChange={(e) =>
                       setDadosFamilia((prev) => ({ ...prev, equipamento_id: Number.parseInt(e.target.value) }))
                     }
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.equipamento_id ? "border-red-500" : "border-gray-300"
-                      }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.equipamento_id ? "border-red-500" : "border-gray-300"
+                    }`}
                   >
                     <option value={0}>Selecione o equipamento</option>
                     {equipamentos.map((equipamento) => (
@@ -816,7 +826,7 @@ const CadastroFamilia: React.FC = () => {
                     {renderError(errors.responsavel?.cpf)}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">RG</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">RG *</label>
                     <input
                       type="text"
                       placeholder="00.000.000-0"
@@ -829,6 +839,7 @@ const CadastroFamilia: React.FC = () => {
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    {errors.responsavel?.rg && <p className="mt-1 text-sm text-red-600">{errors.responsavel.rg}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Órgão Expedidor</label>
@@ -1348,7 +1359,11 @@ const CadastroFamilia: React.FC = () => {
                           value={integrante.renda_mensal}
                           onChange={(e) =>
                             // AQUI ESTÁ A MUDANÇA: Garante que o valor passado para a função não seja negativo
-                            atualizarIntegrante(index, "renda_mensal", Math.max(0, Number.parseFloat(e.target.value) || 0))
+                            atualizarIntegrante(
+                              index,
+                              "renda_mensal",
+                              Math.max(0, Number.parseFloat(e.target.value) || 0),
+                            )
                           }
                           className={getInputClass(errors.integrantes?.[index]?.renda_mensal)}
                         />
@@ -1679,7 +1694,7 @@ const CadastroFamilia: React.FC = () => {
                         ...prev,
                         habitacao: {
                           ...prev.habitacao,
-                          qtd_comodos: Math.max(0, Number.parseInt(e.target.value) || 0)
+                          qtd_comodos: Math.max(0, Number.parseInt(e.target.value) || 0),
                         },
                       }))
                     }
@@ -1699,7 +1714,7 @@ const CadastroFamilia: React.FC = () => {
                         ...prev,
                         habitacao: {
                           ...prev.habitacao,
-                          qtd_dormitorios: Math.max(0, Number.parseInt(e.target.value) || 0)
+                          qtd_dormitorios: Math.max(0, Number.parseInt(e.target.value) || 0),
                         },
                       }))
                     }
@@ -1960,7 +1975,7 @@ const CadastroFamilia: React.FC = () => {
                       trabalho_renda: {
                         ...prev.trabalho_renda,
                         // CORREÇÃO: Garante que o valor não seja negativo
-                        rendimento_total: Math.max(0, Number(e.target.value))
+                        rendimento_total: Math.max(0, Number(e.target.value)),
                       },
                     }))
                   }
@@ -2032,7 +2047,7 @@ const CadastroFamilia: React.FC = () => {
                           value={dadosFamilia.programas_sociais.find((p) => p.programa_id === programa.id)?.valor || 0}
                           onChange={(e) => {
                             // CORREÇÃO: Garante que o valor não seja negativo
-                            const valor = Math.max(0, Number.parseFloat(e.target.value) || 0);
+                            const valor = Math.max(0, Number.parseFloat(e.target.value) || 0)
                             setDadosFamilia((prev) => ({
                               ...prev,
                               programas_sociais: prev.programas_sociais.map((p) =>
@@ -2065,7 +2080,7 @@ const CadastroFamilia: React.FC = () => {
                         value={dadosFamilia.despesas.find((d) => d.tipo_despesa_id === tipo.id)?.valor || ""}
                         onChange={(e) => {
                           // CORREÇÃO: Garante que o valor não seja negativo
-                          const valor = Math.max(0, Number.parseFloat(e.target.value) || 0);
+                          const valor = Math.max(0, Number.parseFloat(e.target.value) || 0)
                           setDadosFamilia((prev) => {
                             const despesaExiste = prev.despesas.some((d) => d.tipo_despesa_id === tipo.id)
                             let novasDespesas
@@ -2080,10 +2095,10 @@ const CadastroFamilia: React.FC = () => {
                             // Filtra para remover despesas com valor 0 que não sejam obrigatórias
                             return {
                               ...prev,
-                              despesas: novasDespesas.filter(d => {
-                                const tipoDespesa = tiposDespesas.find(t => t.id === d.tipo_despesa_id)
+                              despesas: novasDespesas.filter((d) => {
+                                const tipoDespesa = tiposDespesas.find((t) => t.id === d.tipo_despesa_id)
                                 return d.valor > 0 || (tipoDespesa && tipoDespesa.obrigatoria)
-                              })
+                              }),
                             }
                           })
                         }}
@@ -2251,15 +2266,10 @@ const CadastroFamilia: React.FC = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      value="assistencia_social"
-                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("assistencia_social")}
+                      value="cras"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("cras")}
                       onChange={(e) =>
-                        handleCheckboxChange(
-                          "situacao_social",
-                          "servicos_publicos",
-                          "assistencia_social",
-                          e.target.checked,
-                        )
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "cras", e.target.checked)
                       }
                       className="mr-2"
                     />
@@ -2268,15 +2278,10 @@ const CadastroFamilia: React.FC = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      value="assistencia_social"
-                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("assistencia_social")}
+                      value="creas"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("creas")}
                       onChange={(e) =>
-                        handleCheckboxChange(
-                          "situacao_social",
-                          "servicos_publicos",
-                          "assistencia_social",
-                          e.target.checked,
-                        )
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "creas", e.target.checked)
                       }
                       className="mr-2"
                     />
@@ -2309,38 +2314,14 @@ const CadastroFamilia: React.FC = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      value="cultura"
-                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("cultura")}
+                      value="habitacao"
+                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("habitacao")}
                       onChange={(e) =>
-                        handleCheckboxChange("situacao_social", "servicos_publicos", "cultura", e.target.checked)
+                        handleCheckboxChange("situacao_social", "servicos_publicos", "habitacao", e.target.checked)
                       }
                       className="mr-2"
                     />
-                    Cultura
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="esporte"
-                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("esporte")}
-                      onChange={(e) =>
-                        handleCheckboxChange("situacao_social", "servicos_publicos", "esporte", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Esporte
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      value="lazer"
-                      checked={dadosFamilia.situacao_social.servicos_publicos.includes("lazer")}
-                      onChange={(e) =>
-                        handleCheckboxChange("situacao_social", "servicos_publicos", "lazer", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    Lazer
+                    Habitação
                   </label>
                   <label className="flex items-center">
                     <input
@@ -2399,7 +2380,7 @@ const CadastroFamilia: React.FC = () => {
 
         {message && (
           <Alert variant={messageType === "error" ? "destructive" : messageType === "success" ? "default" : undefined}>
-            {message}
+            <AlertDescription>{message}</AlertDescription>
           </Alert>
         )}
 

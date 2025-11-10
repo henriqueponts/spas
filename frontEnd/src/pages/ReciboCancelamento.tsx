@@ -45,8 +45,6 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
     return new Date(data).toLocaleDateString("pt-BR", { timeZone: "UTC" })
   }
 
-
-
   const htmlRecibo = `
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -131,6 +129,9 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
         
         .info-value {
           flex: 1;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          word-break: break-word;
         }
 
         .beneficios-table {
@@ -273,15 +274,16 @@ export const gerarReciboCancelamento = (dados: DadosReciboCancelamento) => {
             <span class="info-label">Motivo:</span>
             <span class="info-value">${dados.cancelamento.motivo}</span>
           </div>
-          ${dados.cancelamento.observacoes
-      ? `
+          ${
+            dados.cancelamento.observacoes
+              ? `
           <div class="info-row">
             <span class="info-label">Observações:</span>
             <span class="info-value">${dados.cancelamento.observacoes}</span>
           </div>
           `
-      : ""
-    }
+              : ""
+          }
         </div>
         
         <div class="signature-section">

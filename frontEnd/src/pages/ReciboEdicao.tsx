@@ -129,6 +129,9 @@ export const gerarReciboEdicao = (dados: DadosReciboEdicao) => {
         
         .info-value {
           flex: 1;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          word-break: break-word;
         }
 
         .comparison-table {
@@ -143,6 +146,9 @@ export const gerarReciboEdicao = (dados: DadosReciboEdicao) => {
           border: 1px solid #000;
           padding: 4px 6px;
           text-align: left;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          word-break: break-word;
         }
 
         .comparison-table th {
@@ -241,56 +247,61 @@ export const gerarReciboEdicao = (dados: DadosReciboEdicao) => {
               </tr>
             </thead>
             <tbody>
-              ${dados.autorizacao_anterior.tipo_beneficio !== dados.autorizacao_nova.tipo_beneficio
-      ? `
+              ${
+                dados.autorizacao_anterior.tipo_beneficio !== dados.autorizacao_nova.tipo_beneficio
+                  ? `
               <tr>
                 <td><strong>Tipo de Benefício</strong></td>
                 <td class="old-value">${formatarTipoBeneficio(dados.autorizacao_anterior.tipo_beneficio)}</td>
                 <td class="new-value">${formatarTipoBeneficio(dados.autorizacao_nova.tipo_beneficio)}</td>
               </tr>
               `
-      : ""
-    }
-              ${dados.autorizacao_anterior.quantidade !== dados.autorizacao_nova.quantidade
-      ? `
+                  : ""
+              }
+              ${
+                dados.autorizacao_anterior.quantidade !== dados.autorizacao_nova.quantidade
+                  ? `
               <tr>
                 <td><strong>Quantidade</strong></td>
                 <td class="old-value">${dados.autorizacao_anterior.quantidade}</td>
                 <td class="new-value">${dados.autorizacao_nova.quantidade}</td>
               </tr>
               `
-      : ""
-    }
-              ${dados.autorizacao_anterior.validade_meses !== dados.autorizacao_nova.validade_meses
-      ? `
+                  : ""
+              }
+              ${
+                dados.autorizacao_anterior.validade_meses !== dados.autorizacao_nova.validade_meses
+                  ? `
               <tr>
                 <td><strong>Validade (meses)</strong></td>
                 <td class="old-value">${dados.autorizacao_anterior.validade_meses}</td>
                 <td class="new-value">${dados.autorizacao_nova.validade_meses}</td>
               </tr>
               `
-      : ""
-    }
-              ${dados.autorizacao_anterior.justificativa !== dados.autorizacao_nova.justificativa
-      ? `
+                  : ""
+              }
+              ${
+                dados.autorizacao_anterior.justificativa !== dados.autorizacao_nova.justificativa
+                  ? `
               <tr>
                 <td><strong>Justificativa</strong></td>
                 <td class="old-value">${dados.autorizacao_anterior.justificativa}</td>
                 <td class="new-value">${dados.autorizacao_nova.justificativa}</td>
               </tr>
               `
-      : ""
-    }
-              ${(dados.autorizacao_anterior.observacoes || "") !== (dados.autorizacao_nova.observacoes || "")
-      ? `
+                  : ""
+              }
+              ${
+                (dados.autorizacao_anterior.observacoes || "") !== (dados.autorizacao_nova.observacoes || "")
+                  ? `
               <tr>
                 <td><strong>Observações</strong></td>
                 <td class="old-value">${dados.autorizacao_anterior.observacoes || "Nenhuma"}</td>
                 <td class="new-value">${dados.autorizacao_nova.observacoes || "Nenhuma"}</td>
               </tr>
               `
-      : ""
-    }
+                  : ""
+              }
             </tbody>
           </table>
         </div>
@@ -313,15 +324,16 @@ export const gerarReciboEdicao = (dados: DadosReciboEdicao) => {
             <span class="info-label">Justificativa:</span>
             <span class="info-value">${dados.autorizacao_nova.justificativa}</span>
           </div>
-          ${dados.autorizacao_nova.observacoes
-      ? `
+          ${
+            dados.autorizacao_nova.observacoes
+              ? `
           <div class="info-row">
             <span class="info-label">Observações:</span>
             <span class="info-value">${dados.autorizacao_nova.observacoes}</span>
           </div>
           `
-      : ""
-    }
+              : ""
+          }
         </div>
         
         <div class="section">
