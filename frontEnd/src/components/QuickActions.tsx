@@ -3,7 +3,7 @@
 import type React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
-import { UserPlus, Search, ClipboardList, UserCog, FileText} from "lucide-react"
+import { UserPlus, Search, Gift, UserCog, FileText} from "lucide-react"
 
 interface QuickAction {
   id: string
@@ -40,7 +40,7 @@ const QuickActions: React.FC = () => {
       id: "benefits",
       title: "Benefícios",
       description: "Gerenciar benefícios eventuais",
-      icon: <ClipboardList size={24} />,
+      icon: <Gift size={24} />,
       color: "purple",
       onClick: () => navigate("/beneficios"),
     },

@@ -737,7 +737,7 @@ const CadastroFamilia: React.FC = () => {
                     <option value={0}>Selecione o equipamento</option>
                     {equipamentos.map((equipamento) => (
                       <option key={equipamento.id} value={equipamento.id}>
-                        {equipamento.nome} - {equipamento.regiao}
+                        {equipamento.nome} {equipamento.regiao}
                       </option>
                     ))}
                   </select>
@@ -1942,7 +1942,7 @@ const CadastroFamilia: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Quem trabalha na família?</label>
                 <input
                   type="text"
-                  placeholder="Ex: João (pedreiro), Maria (diarista)"
+                  placeholder="Ex: João e Maria"
                   value={dadosFamilia.trabalho_renda.quem_trabalha}
                   onChange={(e) =>
                     setDadosFamilia((prev) => ({
@@ -2375,8 +2375,11 @@ const CadastroFamilia: React.FC = () => {
   return (
     <div>
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-semibold mb-4">Cadastro de Família</h1>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-4 mt-4">
+                  Cadastro de Família
+                  </h1>
 
         {message && (
           <Alert variant={messageType === "error" ? "destructive" : messageType === "success" ? "default" : undefined}>
@@ -2411,6 +2414,7 @@ const CadastroFamilia: React.FC = () => {
           )}
         </div>
       </main>
+    </div>
     </div>
   )
 }

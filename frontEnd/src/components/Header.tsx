@@ -3,7 +3,8 @@
 import React from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
-import { Home, Users, FileText, User, LogOut, ChevronDown, Menu, X } from "lucide-react"
+import { Home, Users, FileText, User, LogOut, ChevronDown, Menu, X, Gift } from "lucide-react"
+import CrasLogo from "../assets/images/CrasLogo.png"
 
 const Header: React.FC = () => {
   const navigate = useNavigate()
@@ -58,9 +59,11 @@ const Header: React.FC = () => {
           {/* Logo and Navigation */}
           <div className="flex items-center space-x-8">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">S</span>
-              </div>
+                            <img 
+              src={CrasLogo} 
+              alt="CRAS Logo" 
+              className="h-10 mx-auto mr-4"
+            />
               <div className="hidden md:block">
                 <h1 className="text-lg font-bold text-gray-900">SPAS</h1>
               </div>
@@ -80,7 +83,7 @@ const Header: React.FC = () => {
               </button>
 
               <button onClick={() => navigate("/beneficios")} className={getNavItemClasses("/beneficios")}>
-                <FileText size={16} />
+                <Gift size={16} />
                 <span>Benefícios</span>
               </button>
 

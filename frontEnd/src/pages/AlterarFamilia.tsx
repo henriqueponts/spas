@@ -39,6 +39,7 @@ import {
   isValidName,
   isMeaningfulText,
 } from "../utils/formUtils"
+import Header from "../components/Header"
 // Tipos baseados na estrutura do banco
 interface Equipamento {
   id: number
@@ -728,6 +729,7 @@ const AlterarFamilia: React.FC = () => {
 
           return (
             <div key={etapa.id} className="flex items-center">
+              
               <div
                 className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
                   isCompleta
@@ -784,6 +786,7 @@ const AlterarFamilia: React.FC = () => {
     switch (etapaAtual) {
       case 0: // Identificação
         return (
+          
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -834,7 +837,7 @@ const AlterarFamilia: React.FC = () => {
                     <option value={0}>Selecione o equipamento</option>
                     {equipamentos.map((equipamento) => (
                       <option key={equipamento.id} value={equipamento.id}>
-                        {equipamento.nome} - {equipamento.regiao}
+                        {equipamento.nome}{equipamento.regiao}
                       </option>
                     ))}
                   </select>
@@ -2399,7 +2402,10 @@ const AlterarFamilia: React.FC = () => {
   }
 
   return (
+    <div>
+      <Header />
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 py-8">
+     
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
@@ -2441,17 +2447,6 @@ const AlterarFamilia: React.FC = () => {
               <Button variant="outline" onClick={() => navigate("/familias")}>
                 Cancelar
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  localStorage.setItem("rascunho_familia_edicao", JSON.stringify(dadosFamilia))
-                  showMessage("Rascunho salvo com sucesso!", "success")
-                }}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Salvar Rascunho
-              </Button>
             </div>
 
             <div className="flex gap-4">
@@ -2485,6 +2480,7 @@ const AlterarFamilia: React.FC = () => {
           </CardFooter>
         </Card>
       </div>
+    </div>
     </div>
   )
 }
